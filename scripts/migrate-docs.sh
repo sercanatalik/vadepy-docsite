@@ -106,13 +106,9 @@ cat > "$DEST/meta.json" <<'EOF'
   "title": "Documentation",
   "pages": [
     "index",
-    "---Getting Started---",
     "getting-started",
-    "---Guides---",
     "guides",
-    "---API Reference---",
     "api",
-    "---Reference---",
     "conventions",
     "roadmap"
   ]
@@ -161,13 +157,9 @@ cat > "$DEST/guides/meta.json" <<'EOF'
     "market-context",
     "serialization",
     "calibration",
-    "---Rates---",
     "rates",
-    "---Credit---",
     "credit",
-    "---FX---",
     "fx",
-    "---Financing---",
     "financing"
   ]
 }
