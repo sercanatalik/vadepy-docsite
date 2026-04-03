@@ -2,10 +2,13 @@
   "title": "Documentation",
   "pages": [
     "index",
+    "---Getting Started---",
     "getting-started",
+    "---Guides---",
     "guides",
+    "---API Reference---",
     "api",
-    "---",
+    "---Reference---",
     "conventions",
     "roadmap"
   ]

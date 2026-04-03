@@ -14,6 +14,8 @@ from vade.solver import bootstrap
 
 See [Conventions](../conventions) for all accepted string parameter values.
 
+See also: [Calibration Guide](../guides/calibration) for multi-curve calibration walkthroughs. | [Bootstrap & Parametric Guide](../guides/rates/bootstrap-parametric.md) for bootstrap vs optimizer comparison. | [Risk Guide](../guides/rates/risk.md) for solver-based delta and gamma computation.
+
 **Contents:**
 [SolverResult](#solverresult) | [Solver](#solver) | [bootstrap](#bootstrap)
 
@@ -236,33 +238,64 @@ The `instruments` list uses dict format with keys:
 
 **Note:** Unlike [`Solver`](#solver), bootstrap requires the instrument's internal Rust binding via `._inner`. The Solver wrapper handles this conversion automatically, but bootstrap operates at the lower level.
 
+**When to use bootstrap() vs Solver:** `bootstrap()` performs node-by-node Brent root-finding -- fast and exact for sequential calibration where each instrument maps to one curve node. Use [`Solver`](#solver) when instruments share nodes, when you need Levenberg-Marquardt optimization, or when calibrating multiple curves simultaneously.
+
 ### Example
 
-```bash
+```python
 import datetime
-from vade import IRS, DiscountCurve
+from vade import DiscountCurve, Deposit, IRS
 from vade.solver import bootstrap
 
-# One node per instrument (anchor node is fixed at 1.0)
-nodes = {
-    datetime.date(2024, 1, 1): 1.0,
-    datetime.date(2025, 1, 1): 1.0,
-    datetime.date(2026, 1, 1): 1.0,
-}
-curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f", id="usd")
+effective = datetime.date(2025, 6, 16)
 
-irs_1y = IRS(effective=datetime.date(2024, 1, 1), termination="1Y", frequency="a",
-             fixed_rate=3.0, convention="act365f", float_convention="act365f")
-irs_2y = IRS(effective=datetime.date(2024, 1, 1), termination="2Y", frequency="a",
-             fixed_rate=3.5, convention="act365f", float_convention="act365f")
+# Curve with one anchor node (effective=1.0) plus one node per instrument
+curve = DiscountCurve(
+    {
+        effective: 1.0,
+        datetime.date(2025, 12, 16): 1.0,
+        datetime.date(2026, 6, 16): 1.0,
+        datetime.date(2027, 6, 16): 1.0,
+    },
+    interpolation="log_linear",
+    convention="act360",
+)
 
-instruments = [
-    {"instrument": irs_1y._inner, "target": 3.0, "disc_curve_idx": 0, "label": "1Y"},
-    {"instrument": irs_2y._inner, "target": 3.5, "disc_curve_idx": 0, "label": "2Y"},
-]
+# Instruments with rate=0.0 / fixed_rate=0.0 (targets come from instruments dict)
+dep_6m = Deposit(effective=effective, termination="6m", rate=0.0, convention="act360")
+irs_1y = IRS(effective=effective, termination="1y", frequency="a", fixed_rate=0.0,
+             convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2y", frequency="a", fixed_rate=0.0,
+             convention="act360", float_convention="act360")
 
-calibrated = bootstrap(curves=[curve], instruments=instruments, target_curve_idx=0)
-calibrated.discount_factor(datetime.date(2025, 1, 1))  # ~0.97
+# Use ._inner for Rust-level instrument bindings
+# bracket_low/bracket_high set for DF-space search (not rate-space)
+calibrated = bootstrap(
+    curves=[curve],
+    instruments=[
+        {"instrument": dep_6m._inner, "target": 0.0425, "disc_curve_idx": 0, "label": "6M Depo"},
+        {"instrument": irs_1y._inner, "target": 4.00, "disc_curve_idx": 0, "label": "1Y IRS"},
+        {"instrument": irs_2y._inner, "target": 3.85, "disc_curve_idx": 0, "label": "2Y IRS"},
+    ],
+    target_curve_idx=0,
+    bracket_low=0.5,
+    bracket_high=1.5,
+)
+
+# Verify calibration: discount factors decrease with maturity
+df_6m = calibrated.discount_factor(datetime.date(2025, 12, 16))
+df_1y = calibrated.discount_factor(datetime.date(2026, 6, 16))
+df_2y = calibrated.discount_factor(datetime.date(2027, 6, 16))
+assert 0.95 < float(df_6m) < 1.0
+assert 0.90 < float(df_1y) < 1.0
+assert 0.85 < float(df_2y) < 0.98
+assert float(df_6m) > float(df_1y) > float(df_2y)
+
+# Repricing verification: calibrated curve reproduces target rates
+repriced_6m = float(dep_6m.rate(calibrated))
+assert abs(repriced_6m - 0.0425) < 1e-6
 ```
+
+> **See also:** [Bootstrap vs Parametric Calibration](../guides/rates/bootstrap-parametric) for a full walkthrough comparing bootstrap and Solver approaches.
 
 For most calibration workflows, prefer [`Solver`](#solver) which provides richer diagnostics (convergence info, Jacobian, delta/gamma risk). Bootstrap is useful when you need node-by-node stripping with local interpolators (e.g., `"flat_forward"`).

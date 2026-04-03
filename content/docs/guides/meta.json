@@ -5,9 +5,13 @@
     "market-context",
     "serialization",
     "calibration",
+    "---Rates---",
     "rates",
+    "---Credit---",
     "credit",
+    "---FX---",
     "fx",
+    "---Financing---",
     "financing"
   ]
 }

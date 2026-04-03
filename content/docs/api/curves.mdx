@@ -16,6 +16,8 @@ See [Conventions](../conventions) for all accepted string parameter values.
 **Contents:**
 [DiscountCurve](#discountcurve) | [LineCurve](#linecurve) | [ForwardCurve](#forwardcurve) | [SpreadCurve](#spreadcurve) | [CompositeCurve](#compositecurve) | [TurnOfYearCurve](#turnofyearcurve) | [FXImpliedCurve](#fximpliedcurve) | [NelsonSiegel](#nelsonsiegel) | [NelsonSiegelSvensson](#nelsonsiegelsvensson) | [SmithWilson](#smithwilson) | [IRImpliedCurve](#irimpliedcurve) | [CreditImpliedCurve](#creditimpliedcurve) | [FittedBondCurve](#fittedbondcurve)
 
+See also: [Curve Building Guide](../guides/rates/curve-building) for end-to-end curve construction workflows.
+
 ______________________________________________________________________
 
 ## DiscountCurve
@@ -267,6 +269,52 @@ df = spread.discount_factor(datetime.date(2025, 1, 1))
 assert 0.9 < df < 1.0  # spread-adjusted discount factor
 ```
 
+### Advanced Example
+
+Multiplicative mode and JSON roundtrip:
+
+```python
+import datetime
+from vade import DiscountCurve, SpreadCurve
+
+# Base OIS curve with realistic discount factors
+base = DiscountCurve(
+    {
+        datetime.date(2025, 6, 16): 1.0,
+        datetime.date(2026, 6, 16): 0.9615,
+        datetime.date(2027, 6, 16): 0.9240,
+        datetime.date(2028, 6, 16): 0.8880,
+    },
+    interpolation="log_linear",
+    convention="act360",
+)
+
+# Credit spread term structure (in zero-rate space)
+spread_nodes = {
+    datetime.date(2025, 6, 16): 0.005,
+    datetime.date(2026, 6, 16): 0.008,
+    datetime.date(2027, 6, 16): 0.012,
+    datetime.date(2028, 6, 16): 0.015,
+}
+
+# Additive spread: zero_rate = base_zero_rate + spread
+additive = SpreadCurve(base.to_json(), spread_nodes, mode="additive")
+df_add = additive.discount_factor(datetime.date(2027, 6, 16))
+assert 0.85 < float(df_add) < 0.95  # lower DF than base due to spread
+
+# Multiplicative spread: discount_factor = base_df * spread_df
+multiplicative = SpreadCurve(base.to_json(), spread_nodes, mode="multiplicative")
+df_mult = multiplicative.discount_factor(datetime.date(2027, 6, 16))
+assert 0.85 < float(df_mult) < 0.95
+
+# JSON roundtrip preserves all parameters
+restored = SpreadCurve.from_json(additive.to_json())
+df_restored = restored.discount_factor(datetime.date(2027, 6, 16))
+assert abs(float(df_restored) - float(df_add)) < 1e-12
+```
+
+> **See also:** [Curve Building Guide](../guides/rates/curve-building) for spread curve usage in multi-curve frameworks.
+
 ______________________________________________________________________
 
 ## CompositeCurve
@@ -324,6 +372,49 @@ curve2 = DiscountCurve(nodes2, convention="act365f")
 composite = CompositeCurve([curve1, curve2])
 df = composite.discount_factor(datetime.date(2025, 1, 1))
 assert 0.96 < df < 0.98  # product of 0.98 * 0.99
+```
+
+### Advanced Example
+
+DF multiplicativity proof and IRS pricing with a composite funding curve:
+
+```python
+import datetime
+from vade import DiscountCurve, CompositeCurve, IRS
+
+# OIS discount curve (risk-free rate ~4%)
+ois = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2026, 6, 16): 0.9615,
+     datetime.date(2027, 6, 16): 0.9240},
+    convention="act360", id="ois",
+)
+
+# Funding spread curve (credit spread ~20bps)
+spread = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2026, 6, 16): 0.998,
+     datetime.date(2027, 6, 16): 0.996},
+    convention="act360", id="spread",
+)
+
+# Composite = OIS x Spread (DF is product of components)
+funding = CompositeCurve([ois, spread], id="funding")
+df_composite = funding.discount_factor(datetime.date(2026, 6, 16))
+df_ois = ois.discount_factor(datetime.date(2026, 6, 16))
+df_spread = spread.discount_factor(datetime.date(2026, 6, 16))
+assert abs(float(df_composite) - float(df_ois) * float(df_spread)) < 1e-10
+
+# Use composite curve for IRS discounting
+irs = IRS(
+    effective=datetime.date(2025, 6, 16),
+    termination="2y",
+    frequency="s",
+    convention="act360",
+    fixed_rate=4.0,
+    notional=10_000_000,
+    currency="usd",
+)
+npv = irs.npv(funding)
+assert isinstance(float(npv), float)
 ```
 
 ______________________________________________________________________
@@ -386,6 +477,48 @@ df = toy.discount_factor(datetime.date(2025, 1, 1))
 assert 0.9 < df < 1.0  # adjusted discount factor
 ```
 
+### Advanced Example
+
+Year-end effect on discount factors and JSON roundtrip:
+
+```python
+import datetime
+from vade import DiscountCurve, TurnOfYearCurve
+
+# Smooth underlying curve
+inner = DiscountCurve(
+    {
+        datetime.date(2025, 6, 16): 1.0,
+        datetime.date(2026, 6, 16): 0.9615,
+        datetime.date(2027, 6, 16): 0.9240,
+        datetime.date(2028, 6, 16): 0.8880,
+    },
+    interpolation="log_linear",
+    convention="act365f",
+)
+
+# Year-end bumps in basis points (5bp at 2025 year-end, 3bp at 2026 year-end)
+bumps = {
+    datetime.date(2025, 12, 31): 5.0,
+    datetime.date(2026, 12, 31): 3.0,
+}
+toy = TurnOfYearCurve(inner.to_json(), bumps, convention="act365f")
+
+# Discount factors reflect year-end bumps
+df_after_ye = toy.discount_factor(datetime.date(2026, 1, 2))
+inner_df_after = inner.discount_factor(datetime.date(2026, 1, 2))
+
+# TurnOfYear curve produces lower DFs than inner curve around year-end
+assert float(df_after_ye) < float(inner_df_after)
+
+# JSON roundtrip preserves bumps
+restored = TurnOfYearCurve.from_json(toy.to_json())
+df_check = restored.discount_factor(datetime.date(2026, 1, 2))
+assert abs(float(df_check) - float(df_after_ye)) < 1e-12
+```
+
+> **See also:** [Curve Building Guide](../guides/rates/curve-building) for incorporating turn-of-year effects in curve construction.
+
 ______________________________________________________________________
 
 ## FXImpliedCurve
@@ -393,6 +526,8 @@ ______________________________________________________________________
 Proxy curve for FX-adjusted discounting. _Rust-backed._
 
 Used in cross-currency frameworks where discounting in one currency is proxied through another via FX rates and interest rate differentials.
+
+See also: [FX Rates & Forwards Guide](../guides/fx/fx-rates-forwards) for FX implied curve construction.
 
 ### Constructor
 
@@ -458,6 +593,8 @@ ______________________________________________________________________
 ## NelsonSiegel
 
 Nelson-Siegel parametric yield curve model. _Rust-backed._
+
+See also: [Bootstrap & Parametric Guide](../guides/rates/bootstrap-parametric) for parametric curve fitting workflows.
 
 Models the yield curve as a function of three factors (level, slope, curvature) with a single decay parameter tau.
 
@@ -653,6 +790,8 @@ Implied curve for bucket-level delta risk reporting. _Rust-backed._
 
 Constructs a curve from a source [DiscountCurve](#discountcurve) with custom tenor buckets. Used to compute bucket-level risk sensitivities.
 
+See also: [Risk Guide](../guides/rates/risk) for IRImpliedCurve usage in delta/gamma computation.
+
 ### Constructor
 
 ```bash
@@ -718,6 +857,8 @@ ______________________________________________________________________
 Credit implied curve with piecewise flat hazard rates. _Rust-backed._
 
 Models credit risk through survival probabilities derived from hazard rates. Used for CDS pricing and credit risk analysis.
+
+See also: [Credit Curves & CDS Guide](../guides/credit/credit-curves-cds) for credit curve calibration workflows.
 
 ### Constructor
 
@@ -875,3 +1016,52 @@ assert len(errors) == 5  # one per bond
 inner = fc.curve()
 assert isinstance(inner, NelsonSiegel)
 ```
+
+### Advanced Example
+
+Convergence diagnostics, per-bond pricing errors, and inner curve extraction:
+
+```python
+import datetime
+from vade import FittedBondCurve, FixedRateBond
+
+bonds = [
+    FixedRateBond(effective=datetime.date(2024, 6, 15), termination="2y",
+                  fixed_rate=3.5, frequency="s", convention="act365f", currency="usd"),
+    FixedRateBond(effective=datetime.date(2024, 6, 15), termination="3y",
+                  fixed_rate=3.75, frequency="s", convention="act365f", currency="usd"),
+    FixedRateBond(effective=datetime.date(2024, 6, 15), termination="5y",
+                  fixed_rate=4.0, frequency="s", convention="act365f", currency="usd"),
+    FixedRateBond(effective=datetime.date(2024, 6, 15), termination="7y",
+                  fixed_rate=4.25, frequency="s", convention="act365f", currency="usd"),
+    FixedRateBond(effective=datetime.date(2024, 6, 15), termination="10y",
+                  fixed_rate=4.5, frequency="s", convention="act365f", currency="usd"),
+]
+
+clean_prices = [99.5, 99.0, 98.5, 97.5, 96.0]
+
+fc = FittedBondCurve(
+    bonds=bonds,
+    clean_prices=clean_prices,
+    settlement=datetime.date(2025, 6, 16),
+    model="NS",
+)
+
+# Check convergence diagnostics
+assert fc.converged
+assert fc.iterations < 100
+assert fc.rmse < 1.0  # RMSE in price terms
+
+# pricing_errors() returns per-bond fitting errors
+errors = fc.pricing_errors()
+assert len(errors) == 5
+for err in errors:
+    assert abs(err) < 2.0  # each bond fits within 2 price points
+
+# .curve() extracts the underlying parametric curve
+inner_curve = fc.curve()
+df = inner_curve.discount_factor(datetime.date(2030, 6, 16))
+assert 0.70 < float(df) < 1.0
+```
+
+> **Tip:** Use `pricing_errors()` to identify bonds that fit poorly -- these may indicate data issues or bonds with special features (e.g., on-the-run premiums). Consider excluding or down-weighting them via the `weights` parameter.

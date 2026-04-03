@@ -5,6 +5,8 @@ description: "FX rates with graph-based cross-rate triangulation, currency conve
 
 FX rates with graph-based cross-rate triangulation, currency conversion, and FX forward pricing.
 
+See also: [FX Rates & Forwards Guide](../guides/fx/fx-rates-forwards) | [Cross-Currency Swaps Guide](../guides/fx/cross-currency.md) | [Non-Deliverable Instruments Guide](../guides/fx/non-deliverable.md)
+
 All types are available via flat import:
 
 ```bash
@@ -54,6 +56,45 @@ pair.rhs  # 'usd'
 inv = pair.invert()
 inv.lhs  # 'usd'
 inv.rhs  # 'eur'
+```
+
+### Advanced Example
+
+```python
+from vade import FXPair
+
+# Parse multiple currency pairs
+eurusd = FXPair("eurusd")
+gbpusd = FXPair("gbpusd")
+usdjpy = FXPair("usdjpy")
+
+# Access base (lhs) and quote (rhs) currencies
+assert eurusd.lhs == "eur"
+assert eurusd.rhs == "usd"
+assert gbpusd.lhs == "gbp"
+assert gbpusd.rhs == "usd"
+assert usdjpy.lhs == "usd"
+assert usdjpy.rhs == "jpy"
+
+# Inversion swaps base and quote
+inv = eurusd.invert()
+assert inv.lhs == "usd"
+assert inv.rhs == "eur"
+
+# Double inversion returns to original
+inv2 = inv.invert()
+assert inv2.lhs == "eur"
+assert inv2.rhs == "usd"
+
+# Cross-rate pair
+eurgbp = FXPair("eurgbp")
+assert eurgbp.lhs == "eur"
+assert eurgbp.rhs == "gbp"
+
+# Invert cross-rate
+gbpeur = eurgbp.invert()
+assert gbpeur.lhs == "gbp"
+assert gbpeur.rhs == "eur"
 ```
 
 ______________________________________________________________________
@@ -182,4 +223,67 @@ assert float(fwd_rate) > 1.0  # forward rate reflects interest rate differential
 
 fwd_pts = fwd.points("eurusd", delivery, curves)
 assert isinstance(float(fwd_pts), float)  # forward points (forward - spot)
+```
+
+### Advanced Example
+
+```python
+import datetime
+from vade import DiscountCurve, FXRates, FXForwards
+
+# Spot rates for two major pairs
+spot_date = datetime.date(2024, 6, 3)
+fx = FXRates({"eurusd": 1.08, "gbpusd": 1.27}, spot_date)
+
+# Discount curves per currency (USD, EUR, GBP)
+# Higher discount factor = lower interest rate
+usd_nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 7, 1): 0.955}
+eur_nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 7, 1): 0.965}
+gbp_nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 7, 1): 0.960}
+
+usd_curve = DiscountCurve(usd_nodes, convention="act365f", interpolation="log_linear", id="usd")
+eur_curve = DiscountCurve(eur_nodes, convention="act365f", interpolation="log_linear", id="eur")
+gbp_curve = DiscountCurve(gbp_nodes, convention="act365f", interpolation="log_linear", id="gbp")
+
+# Settlement dates per currency
+settlements = {
+    "usd": spot_date,
+    "eur": spot_date,
+    "gbp": spot_date,
+}
+fwd = FXForwards(fx, settlements)
+curves = {"usd": usd_curve, "eur": eur_curve, "gbp": gbp_curve}
+
+# Forward rates at multiple delivery dates show term structure
+delivery_1m = datetime.date(2024, 7, 3)
+delivery_3m = datetime.date(2024, 9, 3)
+delivery_6m = datetime.date(2024, 12, 3)
+delivery_1y = datetime.date(2025, 6, 3)
+
+rate_1m = float(fwd.rate("eurusd", delivery_1m, curves))
+rate_3m = float(fwd.rate("eurusd", delivery_3m, curves))
+rate_6m = float(fwd.rate("eurusd", delivery_6m, curves))
+rate_1y = float(fwd.rate("eurusd", delivery_1y, curves))
+
+# Forward rates increase with tenor (EUR rates < USD rates => EUR appreciates)
+assert 1.08 < rate_1m < rate_3m < rate_6m < rate_1y
+
+# Forward points = forward rate - spot rate
+pts_1m = float(fwd.points("eurusd", delivery_1m, curves))
+pts_3m = float(fwd.points("eurusd", delivery_3m, curves))
+pts_6m = float(fwd.points("eurusd", delivery_6m, curves))
+pts_1y = float(fwd.points("eurusd", delivery_1y, curves))
+
+# Points are positive and increase with tenor
+assert 0 < pts_1m < pts_3m < pts_6m < pts_1y
+assert 0.001 < pts_1m < 0.01   # small for 1M
+assert 0.005 < pts_1y < 0.02   # larger for 1Y
+
+# GBP/USD forward rates via the same curve set
+gbp_rate_1y = float(fwd.rate("gbpusd", delivery_1y, curves))
+assert 1.27 < gbp_rate_1y < 1.30  # GBP also appreciates vs USD
+
+# Cross-rate: EUR/GBP derived from triangulation
+eurgbp_fwd = float(fwd.rate("eurgbp", delivery_1y, curves))
+assert 0.84 < eurgbp_fwd < 0.87  # ~1.09/1.28
 ```

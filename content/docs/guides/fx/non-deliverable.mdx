@@ -9,12 +9,12 @@ currencies (BRL, INR, KRW, CNY, TWD) where currency controls limit deliverabilit
 
 Vade provides three ND instrument types:
 
-- **NDF** -- Non-Deliverable Forward (single FX net settlement)
-- **NDIRS** -- Non-Deliverable Interest Rate Swap (per-period FX conversion)
-- **NDXCS** -- Non-Deliverable Cross-Currency Swap (ND leg with FX conversion)
+- **[NDF](../../api/instruments#ndf)** -- Non-Deliverable Forward (single FX net settlement)
+- **[NDIRS](../../api/instruments#ndirs)** -- Non-Deliverable Interest Rate Swap (per-period FX conversion)
+- **[NDXCS](../../api/instruments#ndxcs)** -- Non-Deliverable Cross-Currency Swap (ND leg with FX conversion)
 
 All three share a unified FX fixing mechanism: a `fx_fixings` dict mapping
-dates to known FX rates, with IRP-implied forward fallback for missing dates.
+dates to known [FXRates](../../api/fx#fxrates), with IRP-implied forward fallback for missing dates.
 
 ## Setup
 

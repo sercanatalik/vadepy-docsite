@@ -38,8 +38,15 @@ assert spot > fwd_1y
 
 ## Guides
 
-- [Curve Building](curve-building) -- Interpolation method comparison and forward rate profiles from a calibrated DiscountCurve
-- [Bootstrap & Parametric Curves](bootstrap-parametric) -- Node-by-node bootstrap via Brent root-finding and NelsonSiegel analytical models
-- [Pricing](pricing) -- Price IRS, FRA, ZCS, OIS, and Deposit against calibrated curves
-- [Risk](risk) -- AD-based delta, gamma, and tenor-bucketed risk sensitivities
-- [Caps & Floors](capfloor) -- Cap and floor pricing with Black-76 and Bachelier volatility models
+- [Curve Building](../curve-building) -- Interpolation method comparison and forward rate profiles from a calibrated DiscountCurve
+- [Bootstrap & Parametric Curves](../bootstrap-parametric) -- Node-by-node bootstrap via Brent root-finding and NelsonSiegel analytical models
+- [Pricing](../pricing) -- Price IRS, FRA, ZCS, OIS, and Deposit against calibrated curves
+- [Risk](../risk) -- AD-based delta, gamma, and tenor-bucketed risk sensitivities
+- [Caps & Floors](../capfloor) -- Cap and floor pricing with Black-76 and Bachelier volatility models
+
+## API Reference
+
+- [Curves](../../api/curves) -- DiscountCurve, LineCurve, ForwardCurve, parametric models (NelsonSiegel, SmithWilson)
+- [Instruments](../../api/instruments) -- IRS, FRA, ZCS, OIS, Deposit, IRFuture, CapFloor
+- [Solver](../../api/solver) -- Multi-curve calibration, bootstrap, and Levenberg-Marquardt solver
+- [Cashflows](../../api/cashflows) -- Leg construction, period types, and accrual conventions

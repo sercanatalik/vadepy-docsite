@@ -14,7 +14,7 @@
 set -euo pipefail
 
 SRC="/Users/sercan/codebase/vadepy/docs"
-DEST="/Users/sercan/codebase/vadepy-docs/content/docs"
+DEST="/Users/sercan/codebase/vadepy-docsite/content/docs"
 
 # Clean destination (keep .gitkeep if any)
 rm -rf "$DEST"
