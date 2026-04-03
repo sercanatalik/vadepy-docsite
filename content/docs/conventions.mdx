@@ -1,0 +1,109 @@
+---
+title: "Conventions Reference"
+description: "Lookup table for all string parameter values accepted by vade."
+---
+
+Lookup table for all string parameter values accepted by vade.
+
+______________________________________________________________________
+
+## Frequencies
+
+| Value | Description                   | Used by                             |
+| ----- | ----------------------------- | ----------------------------------- |
+| `"M"` | Monthly (1-month periods)     | `Schedule`, all instruments         |
+| `"Q"` | Quarterly (3-month periods)   | `Schedule`, all instruments         |
+| `"S"` | Semi-annual (6-month periods) | `Schedule`, all instruments         |
+| `"A"` | Annual (12-month periods)     | `Schedule`, all instruments         |
+| `"Z"` | Zero-coupon (single period)   | `Schedule`, zero-coupon instruments |
+
+## Day Count Conventions
+
+| Value           | Description                              | Used by                                       |
+| --------------- | ---------------------------------------- | --------------------------------------------- |
+| `"act360"`      | Actual/360                               | `dcf()`, most IR instruments, `DiscountCurve` |
+| `"act365f"`     | Actual/365 Fixed                         | `dcf()`, GBP instruments, `ForwardCurve`      |
+| `"act365.25"`   | Actual/365.25                            | `dcf()`                                       |
+| `"act364"`      | Actual/364                               | `dcf()`                                       |
+| `"actactisda"`  | Actual/Actual ISDA                       | `dcf()`, bond accrual                         |
+| `"30/360"`      | 30/360 (US)                              | `dcf()`, USD bonds                            |
+| `"30e/360"`     | 30E/360 (European)                       | `dcf()`, EUR bonds                            |
+| `"30e/360isda"` | 30E/360 ISDA (requires termination date) | `dcf()`                                       |
+| `"bus252"`      | Business/252 (requires calendar)         | `dcf()`, BRL instruments                      |
+| `"one"`         | Always returns 1.0                       | `dcf()`                                       |
+
+Aliases: `"actual360"` for `"act360"`, `"act365fixed"` for `"act365f"`, `"actact"` / `"actualactual"` for `"actactisda"`, `"30360"` / `"thirty360"` for `"30/360"`, `"30e360"` for `"30e/360"`, `"30e360isda"` for `"30e/360isda"`, `"bus/252"` for `"bus252"`, `"1"` / `"1/1"` for `"one"`.
+
+## Business Day Adjusters
+
+| Value                  | Description                                           | Used by                               |
+| ---------------------- | ----------------------------------------------------- | ------------------------------------- |
+| `"modified_following"` | Roll forward; if month changes, roll backward instead | `Schedule` (default), all instruments |
+| `"following"`          | Roll forward to next business day                     | `Schedule`, instruments               |
+| `"preceding"`          | Roll backward to previous business day                | `Schedule`, instruments               |
+| `"modified_preceding"` | Roll backward; if month changes, roll forward instead | `Schedule`, instruments               |
+| `"actual"`             | No adjustment                                         | `Schedule`                            |
+
+Aliases: `"mf"` / `"mod_following"` / `"modfollowing"` for `"modified_following"`, `"fol"` for `"following"`, `"pre"` for `"preceding"`, `"mp"` / `"mod_preceding"` / `"modpreceding"` for `"modified_preceding"`, `"none"` for `"actual"`.
+
+## Roll Day
+
+| Value      | Description                                     | Used by    |
+| ---------- | ----------------------------------------------- | ---------- |
+| `"eom"`    | End of month                                    | `Schedule` |
+| `"imm"`    | IMM date (3rd Wednesday)                        | `Schedule` |
+| `1` - `31` | Specific day of month (clamped to month length) | `Schedule` |
+
+## Stub Inference
+
+| Value           | Description                       | Used by    |
+| --------------- | --------------------------------- | ---------- |
+| `"short_front"` | Short stub at the front (default) | `Schedule` |
+| `"long_front"`  | Long stub at the front            | `Schedule` |
+| `"short_back"`  | Short stub at the back            | `Schedule` |
+| `"long_back"`   | Long stub at the back             | `Schedule` |
+
+## Interpolation Methods
+
+| Value                | Description                                    | Used by                      |
+| -------------------- | ---------------------------------------------- | ---------------------------- |
+| `"log_linear"`       | Log-linear (piecewise constant forward rates)  | `DiscountCurve` (default)    |
+| `"linear"`           | Linear interpolation                           | `LineCurve` (default)        |
+| `"linear_zero_rate"` | Linear in zero-rate space                      | `DiscountCurve`, `LineCurve` |
+| `"flat_forward"`     | Flat forward rates (step function)             | `ForwardCurve` (default)     |
+| `"flat_backward"`    | Flat backward rates                            | `ForwardCurve`               |
+| `"natural_cubic"`    | Natural cubic spline (C2-continuous)           | `DiscountCurve`, `LineCurve` |
+| `"log_cubic"`        | Log-cubic spline (positive DFs guaranteed)     | `DiscountCurve`              |
+| `"hermite"`          | Hermite cubic with finite-difference tangents  | `DiscountCurve`, `LineCurve` |
+| `"monotone_cubic"`   | Fritsch-Carlson monotonicity-preserving        | `DiscountCurve`, `LineCurve` |
+| `"convex_monotone"`  | Hagan-West convex monotone (positive forwards) | `DiscountCurve`              |
+
+## Named Calendars
+
+| Value   | Description        |
+| ------- | ------------------ |
+| `"NYC"` | New York           |
+| `"LDN"` | London             |
+| `"TGT"` | TARGET (Eurozone)  |
+| `"TYO"` | Tokyo              |
+| `"SYD"` | Sydney             |
+| `"ZUR"` | Zurich             |
+| `"STK"` | Stockholm          |
+| `"OSL"` | Oslo               |
+| `"TRO"` | Toronto            |
+| `"FED"` | US Federal Reserve |
+| `"WLG"` | Wellington         |
+| `"MUM"` | Mumbai             |
+| `"MEX"` | Mexico City        |
+| `"BJS"` | Beijing            |
+| `"NSW"` | New South Wales    |
+
+## Tenor Strings
+
+| Format | Example | Description                         |
+| ------ | ------- | ----------------------------------- |
+| `"NY"` | `"2Y"`  | N years                             |
+| `"NM"` | `"6M"`  | N months                            |
+| `"NW"` | `"1W"`  | N weeks                             |
+| `"ND"` | `"3D"`  | N calendar days                     |
+| `"NB"` | `"3B"`  | N business days (requires calendar) |

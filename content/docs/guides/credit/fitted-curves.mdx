@@ -1,0 +1,144 @@
+---
+title: "Fitted Bond Curves"
+description: "Fit parametric yield curves to a portfolio of bond market prices using"
+---
+
+Fit parametric yield curves to a portfolio of bond market prices using
+nonlinear least-squares optimization. Supports Nelson-Siegel (NS),
+Nelson-Siegel-Svensson (NSS), and Smith-Wilson (SW) models.
+
+---
+
+## Setup
+
+Create a portfolio of fixed-rate bonds with different maturities and their
+observed market prices. The fitted curve will find the parametric yield curve
+that best reprices these bonds.
+
+```python
+import datetime
+from vade import FixedRateBond, FittedBondCurve
+
+settlement = datetime.date(2024, 1, 15)
+
+bonds = [
+    FixedRateBond(
+        effective=settlement,
+        termination=datetime.date(2026, 1, 15),
+        frequency="s",
+        convention="act365f",
+        coupon=0.03,
+        face_value=100.0,
+    ),
+    FixedRateBond(
+        effective=settlement,
+        termination=datetime.date(2027, 1, 15),
+        frequency="s",
+        convention="act365f",
+        coupon=0.035,
+        face_value=100.0,
+    ),
+    FixedRateBond(
+        effective=settlement,
+        termination=datetime.date(2029, 1, 15),
+        frequency="s",
+        convention="act365f",
+        coupon=0.04,
+        face_value=100.0,
+    ),
+    FixedRateBond(
+        effective=settlement,
+        termination=datetime.date(2031, 1, 15),
+        frequency="s",
+        convention="act365f",
+        coupon=0.042,
+        face_value=100.0,
+    ),
+    FixedRateBond(
+        effective=settlement,
+        termination=datetime.date(2034, 1, 15),
+        frequency="s",
+        convention="act365f",
+        coupon=0.045,
+        face_value=100.0,
+    ),
+]
+
+clean_prices = [99.5, 99.0, 98.5, 97.0, 95.0]
+```
+
+## Nelson-Siegel
+
+The Nelson-Siegel model parametrizes the zero curve with four parameters
+(beta0, beta1, beta2, tau) capturing the level, slope, and curvature of the
+term structure. It is widely used by central banks for yield curve estimation.
+
+See [FittedBondCurve](../../api/curves#fittedbondcurve) API reference.
+
+```python continuation
+fc_ns = FittedBondCurve(bonds, clean_prices, settlement, "NS")
+
+assert fc_ns.converged
+assert fc_ns.rmse < 1.0
+
+# Query the fitted curve
+df = fc_ns.discount_factor(datetime.date(2029, 1, 15))
+assert 0.5 < df < 1.0
+
+zr = fc_ns.zero_rate(settlement, datetime.date(2029, 1, 15))
+assert 0.0 < zr < 0.10
+```
+
+## Nelson-Siegel-Svensson
+
+NSS extends Nelson-Siegel with two additional parameters (beta3, tau2) that add
+a second hump to the forward rate curve. This provides a better fit to term
+structures with complex shapes, such as those with a dip at medium maturities.
+
+```python continuation
+fc_nss = FittedBondCurve(bonds, clean_prices, settlement, "NSS")
+
+assert fc_nss.converged
+assert fc_nss.rmse < 1.0
+```
+
+## Smith-Wilson
+
+The Smith-Wilson method extrapolates the fitted curve toward an ultimate forward
+rate (UFR), which is required for regulatory discount curves under Solvency II.
+Parameters `ufr` and `alpha` control the target long-term rate and the speed of
+convergence.
+
+```python continuation
+fc_sw = FittedBondCurve(bonds, clean_prices, settlement, "SW", ufr=0.042, alpha=0.1)
+
+assert fc_sw.converged
+assert fc_sw.rmse < 1.0
+```
+
+## Fit Quality
+
+After fitting, inspect per-bond pricing errors and RMSE to assess fit quality.
+Large errors on specific bonds may indicate outliers or model limitations.
+The `pricing_errors()` method returns the signed difference between model and
+market prices for each bond.
+
+```python continuation
+errors = fc_ns.pricing_errors()
+assert len(errors) == len(bonds)
+
+# All errors should be small relative to price
+for err in errors:
+    assert abs(err) < 2.0  # within 2 price points
+
+# RMSE summarises overall fit quality
+assert isinstance(fc_ns.rmse, float)
+assert fc_ns.rmse >= 0.0
+assert fc_ns.iterations > 0
+```
+
+## Next Steps
+
+- [Callable Bonds](callable-bonds) -- OAS using fitted curves as input
+- [Bootstrap & Parametric](../rates/bootstrap-parametric) -- Alternative parametric curve construction
+- [Bonds](bonds) -- Core bond analytics

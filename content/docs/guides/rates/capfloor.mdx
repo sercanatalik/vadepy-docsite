@@ -1,0 +1,169 @@
+---
+title: "Caps & Floors"
+description: "Price interest rate caps and floors using [CapFloor](../../api/instruments.md#capfloor)"
+---
+
+Price interest rate caps and floors using [CapFloor](../../api/instruments#capfloor)
+with Black-76 (lognormal) and Bachelier (normal) volatility models. Caps pay
+when the floating rate exceeds the strike; floors pay when it falls below.
+
+---
+
+## Setup
+
+Cap and floor pricing requires a discount curve for present-valuing cashflows
+and a forecast curve for projecting forward rates. Here we calibrate a single
+curve and use it for both roles.
+
+```python
+import datetime
+from vade import CapFloor, DiscountCurve, Deposit, IRS, Solver
+
+effective = datetime.date(2025, 6, 16)
+
+curve = DiscountCurve(
+    {
+        effective: 1.0,
+        datetime.date(2025, 9, 16): 1.0,
+        datetime.date(2025, 12, 16): 1.0,
+        datetime.date(2026, 6, 16): 1.0,
+        datetime.date(2027, 6, 16): 1.0,
+        datetime.date(2028, 6, 16): 1.0,
+        datetime.date(2030, 6, 16): 1.0,
+    },
+    interpolation="log_linear",
+    convention="act360",
+    id="sofr",
+)
+
+dep_3m = Deposit(effective=effective, termination="3m", rate=0.0, convention="act360")
+dep_6m = Deposit(effective=effective, termination="6m", rate=0.0, convention="act360")
+irs_1y = IRS(effective=effective, termination="1y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=effective, termination="3y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=effective, termination="5y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+
+solver = Solver(
+    curves=[curve],
+    instruments=[
+        (dep_3m, 0.0430), (dep_6m, 0.0425),
+        (irs_1y, 4.10), (irs_2y, 3.95),
+        (irs_3y, 3.85), (irs_5y, 3.80),
+    ],
+)
+result = solver.iterate()
+assert result.converged
+
+disc_curve = solver.get_curve(0)
+forecast_curve = disc_curve
+```
+
+## Cap Pricing with Black-76
+
+The Black-76 model prices each caplet using a lognormal volatility assumption.
+Set `model="black76"` and provide an implied volatility in lognormal terms
+(e.g., 0.20 for 20%).
+
+```python continuation
+cap = CapFloor(
+    effective=effective,
+    termination="5y",
+    strike=0.04,
+    vol=0.20,
+    notional=1_000_000.0,
+    frequency="q",
+    cap_floor_type="cap",
+    model="black76",
+    convention="act360",
+)
+
+float(cap.npv(disc_curve, forecast_curve))  # 169497.62285527054
+```
+
+## Floor Pricing
+
+A floor is the mirror of a cap -- it pays when the floating rate falls below
+the strike. With forward rates near 4% and a strike of 4%, the floor is deeply
+out of the money and has negligible value.
+
+```python continuation
+floor = CapFloor(
+    effective=effective,
+    termination="5y",
+    strike=0.04,
+    vol=0.20,
+    notional=1_000_000.0,
+    frequency="q",
+    cap_floor_type="floor",
+    model="black76",
+    convention="act360",
+)
+
+floor_npv = float(floor.npv(disc_curve, forecast_curve))
+floor_npv < 1.0  # True -- floor is deep OTM
+
+cap_npv = float(cap.npv(disc_curve, forecast_curve))
+cap_minus_floor = cap_npv - floor_npv
+cap_minus_floor > 0  # True -- put-call parity: cap - floor approximates swap value
+```
+
+## Bachelier Model
+
+The Bachelier (normal) model uses an absolute volatility in rate terms rather
+than a lognormal percentage. A typical normal vol is around 50 basis points
+(0.005), compared to 20% (0.20) for Black-76. Set `model="bachelier"`.
+
+```python continuation
+cap_bach = CapFloor(
+    effective=effective,
+    termination="5y",
+    strike=0.04,
+    vol=0.005,
+    notional=1_000_000.0,
+    frequency="q",
+    cap_floor_type="cap",
+    model="bachelier",
+    convention="act360",
+)
+
+float(cap_bach.npv(disc_curve, forecast_curve))  # 169498.43835327454
+```
+
+## Strike Sensitivity
+
+Cap value decreases as the strike increases -- a higher strike means fewer
+caplets finish in the money. This relationship is visible across a range of
+strikes.
+
+```python continuation
+for strike in [0.03, 0.035, 0.04, 0.045, 0.05]:
+    c = CapFloor(
+        effective=effective,
+        termination="5y",
+        strike=strike,
+        vol=0.20,
+        notional=1_000_000.0,
+        frequency="q",
+        cap_floor_type="cap",
+        model="black76",
+        convention="act360",
+    )
+    npv = float(c.npv(disc_curve, forecast_curve))
+
+# Strike 3.0%: higher cap value
+# Strike 5.0%: lower cap value
+assert float(
+    CapFloor(effective=effective, termination="5y", strike=0.03, vol=0.20,
+             notional=1_000_000.0, frequency="q", cap_floor_type="cap",
+             model="black76", convention="act360").npv(disc_curve, forecast_curve)
+) > float(
+    CapFloor(effective=effective, termination="5y", strike=0.05, vol=0.20,
+             notional=1_000_000.0, frequency="q", cap_floor_type="cap",
+             model="black76", convention="act360").npv(disc_curve, forecast_curve)
+)
+```
+
+## Next Steps
+
+- [FX Rates & Forwards](../fx/fx-rates-forwards) -- FX rate triangulation and forward construction
+- [Calibration](../calibration) -- Multi-curve calibration with Solver

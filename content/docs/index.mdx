@@ -1,0 +1,136 @@
+---
+title: "Vade"
+description: "Vade brings institutional-quality fixed income analytics to Python. Built from the ground up in Rust and exposed through seamless PyO3 bindings, it delivers the performance of a compiled trading system with the ergonomics of a Python library."
+---
+
+**Production-grade Fixed Income Quant Library with rates, credit and FX analytics for Python, powered by Rust.**
+
+Vade brings institutional-quality fixed income analytics to Python. Built from the ground up in Rust and exposed through seamless PyO3 bindings, it delivers the performance of a compiled trading system with the ergonomics of a Python library.
+
+______________________________________________________________________
+
+### Why Vade?
+
+- **Rust-powered performance** -- Native speed for curve building, calibration, and risk computation. No compromises.
+- **Automatic differentiation** -- First- and second-order sensitivities (delta, gamma) computed exactly via dual numbers -- no finite differences, no numerical noise.
+- **Full fixed income coverage** -- Interest rate swaps, bonds, CDS, FX forwards, caps & floors, callable bonds, and more.
+- **Multi-curve calibration** -- Simultaneous bootstrap and fitting across discount, forecast, and credit curves.
+- **Market context management** -- Bundle curves, FX rates, and fixings into a single serializable environment.
+- **Zero Python overhead** -- All analytics execute in Rust. Python is the interface, not the bottleneck.
+
+______________________________________________________________________
+
+## Getting Started
+
+Get vade installed and running in under 5 minutes.
+
+- [Installation](getting-started/installation) -- Install vade and verify your setup
+
+## Understanding Vade
+
+Learn how vade works under the hood -- the Rust/Python architecture and the automatic differentiation type system that powers risk analytics.
+
+- [Architecture](getting-started/architecture) -- Rust core, PyO3 bindings, max-Rust philosophy, and performance
+- [Type System](getting-started/type-system) -- Dual/Dual2 automatic differentiation and Union return types
+
+## API Reference
+
+Complete parameter signatures, types, and working examples for every vade class and function.
+
+- [Calendar](api/calendar) -- Schedule generation, business day calendars, day count fractions, tenor arithmetic
+- [Autodiff](api/autodiff) -- Dual and Dual2 automatic differentiation types
+- [Numerical](api/numerical) -- Root-finding solvers (Brent, Newton-Raphson)
+- [Curves](api/curves) -- Discount, forward, spread, and parametric curve classes
+- [Instruments](api/instruments) -- IRS, FRA, ZCS, bonds, CDS, and other financial instruments
+- [Solver](api/solver) -- Multi-curve calibration solver and bootstrap
+- [FX](api/fx) -- FX rates, forwards, and cross-currency support
+- [Context](api/context) -- MarketContext, FixingStore, and evaluation date management
+- [Cashflows](api/cashflows) -- Fixed and floating leg cashflow generation
+
+## Fundamentals
+
+Core concepts that apply across all product areas.
+
+- [Quick Start](guides/quick-start) -- Build a curve, price an instrument, and calibrate in one workflow
+- [Market Context](guides/market-context) -- Build, query, and serialize a complete market environment
+- [Serialization](guides/serialization) -- JSON round-trips for curves and instruments
+- [Calibration](guides/calibration) -- Multi-curve calibration with Solver
+
+## Rates
+
+Interest rate curve construction, instrument pricing, risk analytics, and volatility products.
+
+- [Overview](guides/rates/index) -- Product introduction and key concepts
+- [Curve Building](guides/rates/curve-building) -- Interpolation methods, curve types, and forward rate analysis
+- [Bootstrap & Parametric Curves](guides/rates/bootstrap-parametric) -- Iterative bootstrap, Nelson-Siegel, NSS, Smith-Wilson
+- [Pricing](guides/rates/pricing) -- Price IR instruments against calibrated curves
+- [Risk](guides/rates/risk) -- Delta, gamma, and bucket-level sensitivities
+- [Caps & Floors](guides/rates/capfloor) -- Black-76 and Bachelier pricing
+
+## Credit
+
+Bond analytics, credit default swaps, credit curve construction, and spread analysis.
+
+- [Overview](guides/credit/index) -- Product introduction and key concepts
+- [Bonds](guides/credit/bonds) -- Bond analytics, duration, convexity, Z-spread
+- [Callable Bonds](guides/credit/callable-bonds) -- Callable bond pricing with OAS
+- [Credit Curves & CDS](guides/credit/credit-curves-cds) -- Credit curve construction and CDS pricing
+- [Fitted Curves](guides/credit/fitted-curves) -- Parametric curve fitting to bond portfolios
+- [Spread Analytics](guides/credit/spread-analytics) -- I-spread and asset swap analysis
+
+## FX
+
+FX spot rate triangulation, forward construction, cross-currency swaps, and non-deliverable instruments.
+
+- [Overview](guides/fx/index) -- Product introduction and key concepts
+- [FX Rates & Forwards](guides/fx/fx-rates-forwards) -- FX rate triangulation and forward construction
+- [Cross-Currency Swaps](guides/fx/cross-currency) -- Cross-currency swap pricing and risk
+- [Non-Deliverable Instruments](guides/fx/non-deliverable) -- NDF and non-deliverable swap pricing
+
+## Financing
+
+Planned instruments including repo, securities lending, and structured products.
+
+- [Overview](guides/financing/index) -- Planned instruments and future scope
+
+## Learning Paths
+
+**New to Vade?** Start here:
+[Installation](getting-started/installation) ->
+[Architecture](getting-started/architecture) ->
+[Type System](getting-started/type-system) ->
+[Quick Start](guides/quick-start)
+
+**Rates:**
+[Curve Building](guides/rates/curve-building) ->
+[Bootstrap & Parametric](guides/rates/bootstrap-parametric) ->
+[Calibration](guides/calibration) ->
+[Pricing](guides/rates/pricing) ->
+[Risk](guides/rates/risk) ->
+[Caps & Floors](guides/rates/capfloor)
+
+**Credit:**
+[Bonds](guides/credit/bonds) ->
+[Credit Curves & CDS](guides/credit/credit-curves-cds) ->
+[Spread Analytics](guides/credit/spread-analytics) ->
+[Callable Bonds](guides/credit/callable-bonds) ->
+[Fitted Curves](guides/credit/fitted-curves)
+
+**FX:**
+[FX Rates & Forwards](guides/fx/fx-rates-forwards) ->
+[Cross-Currency Swaps](guides/fx/cross-currency) ->
+[Non-Deliverable Instruments](guides/fx/non-deliverable)
+
+**Market data management:**
+[Market Context](guides/market-context) ->
+[Serialization](guides/serialization)
+
+## Roadmap
+
+See [Roadmap](roadmap) for planned features and milestones.
+
+## Reference
+
+Lookup tables for string enum values and parameter conventions used across the API.
+
+- [Conventions](conventions) -- String enum values for day counts, frequencies, interpolation methods, and more

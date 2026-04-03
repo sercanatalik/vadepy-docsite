@@ -1,0 +1,38 @@
+---
+title: "Installation"
+description: ""
+---
+
+## From PyPI
+
+```bash
+pip install vade
+```
+
+## From Source (Development)
+
+Requires Rust toolchain (1.70+) and maturin:
+
+```bash
+git clone https://github.com/sercanatalik/vade.git
+cd vade
+pip install maturin
+maturin develop --release
+```
+
+## Verify Installation
+
+```python
+import vade
+from vade import DiscountCurve
+import datetime
+
+# Build a simple discount curve
+curve = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.96},
+)
+df = curve.discount_factor(datetime.date(2024, 7, 1))
+print(round(float(df), 6))  # prints a discount factor
+```
+
+If the above runs without errors, vade is correctly installed.

@@ -1,0 +1,219 @@
+---
+title: "Risk"
+description: "Compute delta, gamma, and bucket-level risk sensitivities from calibrated curves using [automatic differentiation](../../getting-started/type-system.md). The [Solver](../../api/solver.md#solver) provides AD-based delta and gamma, while [IRImpliedCurve](../../api/curves.md#irimpliedcurve) offers tenor-bucketed risk reporting."
+---
+
+Compute delta, gamma, and bucket-level risk sensitivities from calibrated curves using [automatic differentiation](../../getting-started/type-system). The [Solver](../../api/solver#solver) provides AD-based delta and gamma, while [IRImpliedCurve](../../api/curves#irimpliedcurve) offers tenor-bucketed risk reporting.
+
+## Setup -- Calibrate with Labeled Instruments
+
+Calibrate a [DiscountCurve](../../api/curves#discountcurve) using the 5-tuple [instrument format](../../api/solver#instruments-format). Labels are required for delta and gamma output to identify which calibrating instrument drives each sensitivity.
+
+```python
+import datetime
+from vade import DiscountCurve, IRS, Solver
+
+effective = datetime.date(2025, 6, 16)
+
+nodes = {
+    effective: 1.0,
+    datetime.date(2026, 6, 16): 1.0,
+    datetime.date(2027, 6, 16): 1.0,
+    datetime.date(2028, 6, 16): 1.0,
+    datetime.date(2030, 6, 16): 1.0,
+    datetime.date(2035, 6, 16): 1.0,
+}
+curve = DiscountCurve(
+    nodes, interpolation="log_linear", convention="act360", id="sofr"
+)
+
+irs_1y = IRS(effective=effective, termination="1Y", frequency="a", fixed_rate=4.00, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=effective, termination="3Y", frequency="a", fixed_rate=3.75, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=effective, termination="5Y", frequency="a", fixed_rate=3.70, convention="act360", float_convention="act360")
+irs_10y = IRS(effective=effective, termination="10Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+
+instruments = [
+    (irs_1y, 4.00, 0, "1Y_IRS", "USD"),
+    (irs_2y, 3.85, 0, "2Y_IRS", "USD"),
+    (irs_3y, 3.75, 0, "3Y_IRS", "USD"),
+    (irs_5y, 3.70, 0, "5Y_IRS", "USD"),
+    (irs_10y, 3.85, 0, "10Y_IRS", "USD"),
+]
+
+solver = Solver(curves=[curve], instruments=instruments)
+result = solver.iterate()
+result.converged  # True
+```
+
+## Delta -- First-Order Sensitivities
+
+Delta measures how an instrument's NPV changes per unit move in each calibration instrument rate. The solver uses first-order AD (Dual numbers) to compute exact analytic sensitivities without finite differences.
+
+```python
+import datetime
+from vade import DiscountCurve, IRS, Solver
+
+effective = datetime.date(2025, 6, 16)
+nodes = {
+    effective: 1.0,
+    datetime.date(2026, 6, 16): 1.0,
+    datetime.date(2027, 6, 16): 1.0,
+    datetime.date(2028, 6, 16): 1.0,
+    datetime.date(2030, 6, 16): 1.0,
+    datetime.date(2035, 6, 16): 1.0,
+}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act360", id="sofr")
+
+irs_1y = IRS(effective=effective, termination="1Y", frequency="a", fixed_rate=4.00, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=effective, termination="3Y", frequency="a", fixed_rate=3.75, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=effective, termination="5Y", frequency="a", fixed_rate=3.70, convention="act360", float_convention="act360")
+irs_10y = IRS(effective=effective, termination="10Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+
+instruments = [
+    (irs_1y, 4.00, 0, "1Y_IRS", "USD"),
+    (irs_2y, 3.85, 0, "2Y_IRS", "USD"),
+    (irs_3y, 3.75, 0, "3Y_IRS", "USD"),
+    (irs_5y, 3.70, 0, "5Y_IRS", "USD"),
+    (irs_10y, 3.85, 0, "10Y_IRS", "USD"),
+]
+
+solver = Solver(curves=[curve], instruments=instruments)
+result = solver.iterate()
+
+# Price a 5Y IRS slightly off-market
+test_irs = IRS(effective=effective, termination="5Y", frequency="a", fixed_rate=3.80, convention="act360", float_convention="act360")
+
+delta_df = solver.delta(test_irs, result)
+delta_df.columns  # ['instrument_label', 'tenor', 'sensitivity', 'currency']
+len(delta_df)  # 5
+any(abs(s) > 1e-10 for s in delta_df["sensitivity"].to_list())  # True
+```
+
+## Portfolio Delta
+
+Pass a list of instruments to compute aggregated portfolio-level delta. The solver sums sensitivities across all instruments in the list.
+
+```python
+import datetime
+from vade import DiscountCurve, IRS, Solver
+
+effective = datetime.date(2025, 6, 16)
+nodes = {
+    effective: 1.0,
+    datetime.date(2026, 6, 16): 1.0,
+    datetime.date(2027, 6, 16): 1.0,
+    datetime.date(2028, 6, 16): 1.0,
+    datetime.date(2030, 6, 16): 1.0,
+    datetime.date(2035, 6, 16): 1.0,
+}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act360", id="sofr")
+
+irs_1y = IRS(effective=effective, termination="1Y", frequency="a", fixed_rate=4.00, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=effective, termination="3Y", frequency="a", fixed_rate=3.75, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=effective, termination="5Y", frequency="a", fixed_rate=3.70, convention="act360", float_convention="act360")
+irs_10y = IRS(effective=effective, termination="10Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+
+instruments = [
+    (irs_1y, 4.00, 0, "1Y_IRS", "USD"),
+    (irs_2y, 3.85, 0, "2Y_IRS", "USD"),
+    (irs_3y, 3.75, 0, "3Y_IRS", "USD"),
+    (irs_5y, 3.70, 0, "5Y_IRS", "USD"),
+    (irs_10y, 3.85, 0, "10Y_IRS", "USD"),
+]
+
+solver = Solver(curves=[curve], instruments=instruments)
+result = solver.iterate()
+
+# Portfolio of two off-market swaps
+port_irs1 = IRS(effective=effective, termination="3Y", frequency="a", fixed_rate=3.80, convention="act360", float_convention="act360")
+port_irs2 = IRS(effective=effective, termination="7Y", frequency="a", fixed_rate=3.80, convention="act360", float_convention="act360")
+
+portfolio_delta = solver.delta([port_irs1, port_irs2], result)
+len(portfolio_delta)  # 5
+portfolio_delta.columns  # ['instrument_label', 'tenor', 'sensitivity', 'currency']
+```
+
+## Gamma -- Second-Order Sensitivities
+
+Gamma measures second-order (convexity) risk using Dual2 automatic differentiation. The result is a cross-gamma matrix showing how delta changes with respect to each calibrating instrument rate.
+
+```python
+import datetime
+from vade import DiscountCurve, IRS, Solver
+
+effective = datetime.date(2025, 6, 16)
+nodes = {
+    effective: 1.0,
+    datetime.date(2026, 6, 16): 1.0,
+    datetime.date(2027, 6, 16): 1.0,
+    datetime.date(2028, 6, 16): 1.0,
+    datetime.date(2030, 6, 16): 1.0,
+    datetime.date(2035, 6, 16): 1.0,
+}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act360", id="sofr")
+
+irs_1y = IRS(effective=effective, termination="1Y", frequency="a", fixed_rate=4.00, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=effective, termination="3Y", frequency="a", fixed_rate=3.75, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=effective, termination="5Y", frequency="a", fixed_rate=3.70, convention="act360", float_convention="act360")
+irs_10y = IRS(effective=effective, termination="10Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+
+instruments = [
+    (irs_1y, 4.00, 0, "1Y_IRS", "USD"),
+    (irs_2y, 3.85, 0, "2Y_IRS", "USD"),
+    (irs_3y, 3.75, 0, "3Y_IRS", "USD"),
+    (irs_5y, 3.70, 0, "5Y_IRS", "USD"),
+    (irs_10y, 3.85, 0, "10Y_IRS", "USD"),
+]
+
+solver = Solver(curves=[curve], instruments=instruments)
+result = solver.iterate()
+
+test_irs = IRS(effective=effective, termination="5Y", frequency="a", fixed_rate=3.80, convention="act360", float_convention="act360")
+
+gamma_df = solver.gamma(test_irs, result)
+"label" in gamma_df.columns  # True
+len(gamma_df)  # 5
+```
+
+## Bucket-Level Risk
+
+[IRImpliedCurve](../../api/curves#irimpliedcurve) provides tenor-bucketed DV01 sensitivities by re-parameterizing a calibrated curve into standard tenor buckets. This gives a risk report aligned with market-standard tenor points.
+
+```python
+import datetime
+import math
+from vade import DiscountCurve, IRImpliedCurve, BusinessCalendar, FixedRateBond
+
+effective = datetime.date(2024, 1, 1)
+
+# Build a curve with known DFs for bucket risk
+nodes = {effective: 1.0}
+for y in range(1, 11):
+    nodes[datetime.date(2024 + y, 1, 1)] = math.exp(-0.03 * y)
+
+source = DiscountCurve(
+    nodes, interpolation="log_linear", convention="act365f", id="test_curve"
+)
+
+cal = BusinessCalendar("NYC")
+tenors = ["1Y", "2Y", "5Y", "10Y"]
+implied = IRImpliedCurve(source, effective, tenors, cal)
+implied.tenor_labels()  # ['0D', '1Y', '2Y', '5Y', '10Y']
+
+float(implied.discount_factor(datetime.date(2025, 1, 1))) > 0.95  # True
+
+bond = FixedRateBond(effective=effective, termination="5Y", coupon=0.04, frequency="s")
+bucket_df = implied.bucket_delta(bond)
+"tenor" in bucket_df.columns  # True
+"delta" in bucket_df.columns  # True
+any(abs(float(d)) > 1e-12 for d in bucket_df["delta"].to_list())  # True
+```
+
+## Next Steps
+
+- [Calibration](../calibration) -- multi-curve frameworks and solver algorithm comparison
+- [Curve Building](curve-building) -- interpolation methods and curve types

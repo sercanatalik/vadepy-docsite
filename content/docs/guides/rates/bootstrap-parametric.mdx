@@ -1,0 +1,153 @@
+---
+title: "Bootstrap & Parametric Curves"
+description: "Use [bootstrap](../../api/solver.md#bootstrap) for node-by-node curve stripping"
+---
+
+Use [bootstrap](../../api/solver#bootstrap) for node-by-node curve stripping
+via Brent root-finding, and the [NelsonSiegel](../../api/curves#nelsonsiegel)
+family for analytical curve models with closed-form zero rate formulas.
+
+---
+
+## Iterative Bootstrap
+
+The `bootstrap()` function calibrates a curve one node at a time using Brent's
+method, compared to the Solver which optimizes all nodes simultaneously via
+matrix-based methods. Bootstrap is conceptually simpler and well-suited for
+single-curve scenarios where each instrument pins exactly one node.
+
+### Setup
+
+```python
+import datetime
+from vade import bootstrap, DiscountCurve, Deposit, FRA, IRS
+
+effective = datetime.date(2025, 6, 16)
+
+curve = DiscountCurve(
+    {
+        effective: 1.0,
+        datetime.date(2025, 12, 16): 1.0,
+        datetime.date(2026, 6, 16): 1.0,
+        datetime.date(2027, 6, 16): 1.0,
+        datetime.date(2028, 6, 16): 1.0,
+        datetime.date(2030, 6, 16): 1.0,
+    },
+    interpolation="log_linear",
+    convention="act360",
+)
+
+dep_6m = Deposit(effective=effective, termination="6m", rate=0.0, convention="act360")
+irs_1y = IRS(effective=effective, termination="1y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=effective, termination="3y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=effective, termination="5y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+```
+
+### Calibration
+
+Unlike the Solver which takes `(instrument, target)` tuples, `bootstrap()` takes
+a list of dicts with `"instrument"`, `"target"`, and `"disc_curve_idx"` keys.
+The instrument value must be the internal Rust binding accessed via `._inner`.
+
+```python continuation
+calibrated = bootstrap(
+    curves=[curve],
+    instruments=[
+        {"instrument": dep_6m._inner, "target": 0.0425, "disc_curve_idx": 0},
+        {"instrument": irs_1y._inner, "target": 4.00, "disc_curve_idx": 0},
+        {"instrument": irs_2y._inner, "target": 3.85, "disc_curve_idx": 0},
+        {"instrument": irs_3y._inner, "target": 3.75, "disc_curve_idx": 0},
+        {"instrument": irs_5y._inner, "target": 3.70, "disc_curve_idx": 0},
+    ],
+    target_curve_idx=0,
+    bracket_low=0.5,
+    bracket_high=1.5,
+)
+
+float(calibrated.discount_factor(datetime.date(2026, 6, 16)))  # 0.9610212146820518
+float(calibrated.discount_factor(datetime.date(2030, 6, 16)))  # 0.8319003344593215
+
+# Verify repricing: instrument rates match the original targets
+abs(float(dep_6m.rate(calibrated)) - 0.0425) < 1e-6  # True
+abs(float(irs_1y.rate(calibrated)) - 4.00) < 1e-4    # True
+abs(float(irs_5y.rate(calibrated)) - 3.70) < 1e-4    # True
+```
+
+---
+
+## Parametric Curves
+
+Parametric curves use analytical formulas with a small number of parameters
+instead of interpolating between node-based discount factors. They produce
+smooth yield curves and are commonly used for scenario analysis, regulatory
+reporting, and fitting observed market yields.
+
+### Nelson-Siegel
+
+The Nelson-Siegel model has four parameters: `beta0` (long-term rate),
+`beta1` (short-term spread), `beta2` (curvature hump), and `tau` (decay
+factor controlling hump location).
+
+```python continuation
+from vade import NelsonSiegel, NelsonSiegelSvensson, SmithWilson
+
+ns = NelsonSiegel(
+    beta0=0.04, beta1=-0.02, beta2=0.03, tau=1.5,
+    base_date=effective, convention="act365f",
+)
+
+float(ns.zero_rate(effective, datetime.date(2026, 6, 16)))  # 0.03189622964353336
+float(ns.zero_rate(effective, datetime.date(2030, 6, 16)))  # 0.041823322038103426
+float(ns.zero_rate(effective, datetime.date(2045, 6, 16)))  # 0.0407494373039477
+
+float(ns.discount_factor(datetime.date(2030, 6, 16)))  # 0.8112076671017623
+```
+
+### Nelson-Siegel-Svensson
+
+The Svensson extension adds `beta3` and `tau2` for a second curvature hump,
+providing more flexibility at intermediate tenors.
+
+```python continuation
+nss = NelsonSiegelSvensson(
+    beta0=0.04, beta1=-0.02, beta2=0.03, beta3=0.01,
+    tau1=1.5, tau2=5.0,
+    base_date=effective, convention="act365f",
+)
+
+float(nss.zero_rate(effective, datetime.date(2026, 6, 16)))  # 0.032772384458854435
+float(nss.zero_rate(effective, datetime.date(2030, 6, 16)))  # 0.04446630078480113
+float(nss.zero_rate(effective, datetime.date(2045, 6, 16)))  # 0.04301943830572509
+```
+
+### Smith-Wilson
+
+The [SmithWilson](../../api/curves#smithwilson) model is used in Solvency II
+regulation. It takes market data points (dates and rates) and extrapolates
+toward an ultimate forward rate (UFR). The `alpha` parameter controls how
+quickly the curve converges to the UFR beyond the last liquid point.
+
+```python continuation
+dates = [
+    datetime.date(2026, 6, 16),
+    datetime.date(2028, 6, 16),
+    datetime.date(2030, 6, 16),
+    datetime.date(2035, 6, 16),
+]
+rates = [0.038, 0.039, 0.037, 0.036]
+
+sw = SmithWilson(
+    dates=dates, rates=rates, ufr=0.042, alpha=0.1,
+    base_date=effective, convention="act365f",
+)
+
+float(sw.discount_factor(datetime.date(2030, 6, 16)))  # 0.8310200391947283
+float(sw.discount_factor(datetime.date(2050, 6, 16)))  # 0.3866408502017419
+float(sw.discount_factor(datetime.date(2075, 6, 16)))  # 0.1366164115809102
+```
+
+## Next Steps
+
+- [Curve Building](curve-building) -- Interpolation methods and forward rate analysis
+- [Serialization](../serialization) -- Save and restore parametric curves via JSON

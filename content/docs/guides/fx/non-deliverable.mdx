@@ -1,0 +1,270 @@
+---
+title: "Non-Deliverable Instruments"
+description: "Non-deliverable (ND) instruments settle in a convertible currency rather than"
+---
+
+Non-deliverable (ND) instruments settle in a convertible currency rather than
+the restricted currency where cashflows accrue. This is common for emerging market
+currencies (BRL, INR, KRW, CNY, TWD) where currency controls limit deliverability.
+
+Vade provides three ND instrument types:
+
+- **NDF** -- Non-Deliverable Forward (single FX net settlement)
+- **NDIRS** -- Non-Deliverable Interest Rate Swap (per-period FX conversion)
+- **NDXCS** -- Non-Deliverable Cross-Currency Swap (ND leg with FX conversion)
+
+All three share a unified FX fixing mechanism: a `fx_fixings` dict mapping
+dates to known FX rates, with IRP-implied forward fallback for missing dates.
+
+## Setup
+
+Build USD and BRL curves for the examples:
+
+```python
+usd_curve = DiscountCurve(
+    {
+        datetime.date(2025, 6, 16): 1.0,
+        datetime.date(2026, 6, 16): 0.9615,
+        datetime.date(2027, 6, 16): 0.9246,
+        datetime.date(2028, 6, 16): 0.8890,
+    },
+    interpolation="log_linear",
+    convention="act360",
+    id="usd",
+)
+
+brl_curve = DiscountCurve(
+    {
+        datetime.date(2025, 6, 16): 1.0,
+        datetime.date(2026, 6, 16): 0.8929,
+        datetime.date(2027, 6, 16): 0.7972,
+        datetime.date(2028, 6, 16): 0.7118,
+    },
+    interpolation="log_linear",
+    convention="act360",
+    id="brl",
+)
+
+fxr = FXRates({"usdbrl": 5.20}, settlement=datetime.date(2025, 6, 16))
+```
+
+## NDF -- Non-Deliverable Forward
+
+An NDF is the simplest ND instrument: a single forward FX exchange that settles
+as a net cash payment in the settlement currency.
+
+### Construction
+
+```python continuation
+ndf = NDF(
+    spec="usdbrl_ndf",
+    effective=datetime.date(2025, 6, 16),
+    delivery=datetime.date(2025, 12, 16),
+    notional=1_000_000.0,
+    contracted_rate=5.25,
+)
+```
+
+### Pricing
+
+The fair rate is the IRP-implied forward. NPV is the discounted net settlement:
+
+```python continuation
+fair_rate = ndf.rate(usd_curve, brl_curve, fxr)
+npv = ndf.npv(usd_curve, brl_curve, fxr)
+assert abs(float(fair_rate)) < 10
+assert abs(float(npv)) < 1e8
+```
+
+### Cashflows
+
+```python continuation
+cf = ndf.cashflows(usd_curve, brl_curve, fxr)
+assert len(cf) >= 1
+```
+
+### Spec-Based Construction
+
+Five market convention specs are available:
+
+```python continuation
+for spec in ["usdbrl_ndf", "usdcny_ndf", "usdinr_ndf", "usdkrw_ndf", "usdtwd_ndf"]:
+    ndf_i = NDF(spec=spec, effective=datetime.date(2025, 6, 16),
+                delivery=datetime.date(2025, 12, 16), notional=1e6,
+                contracted_rate=5.25)
+    assert ndf_i is not None
+```
+
+## NDIRS -- Non-Deliverable Interest Rate Swap
+
+An NDIRS is an IRS where both legs accrue in a restricted currency but
+settle in a convertible currency. Each period's cashflow is converted via
+an FX rate (from fixings or IRP-implied forward).
+
+### Construction
+
+```python continuation
+ndirs = NDIRS(
+    spec="usdbrl_ndirs",
+    effective=datetime.date(2025, 6, 16),
+    termination="2Y",
+    fixed_rate=10.0,
+    notional=1_000_000.0,
+)
+```
+
+### 3-Curve Pricing
+
+NDIRS uses three curves:
+- Settlement discount (USD) -- for NPV discounting
+- Restricted forecast (BRL) -- for floating rate projection
+- Restricted discount (BRL) -- for IRP forward derivation
+
+```python continuation
+par_rate = ndirs.rate(curves=[usd_curve, brl_curve, brl_curve], fx_rates=fxr)
+npv = ndirs.npv(curves=[usd_curve, brl_curve, brl_curve], fx_rates=fxr)
+assert 0 < float(par_rate) < 30
+assert abs(float(npv)) < 1e8
+```
+
+### Partial FX Fixings
+
+For past periods with known FX fixings, pass a date-keyed dict:
+
+```python continuation
+ndirs_fix = NDIRS(
+    spec="usdbrl_ndirs",
+    effective=datetime.date(2025, 6, 16),
+    termination="2Y",
+    fixed_rate=10.0,
+    fx_fixings={datetime.date(2025, 12, 16): 5.35},
+)
+npv_fix = ndirs_fix.npv(curves=[usd_curve, brl_curve, brl_curve], fx_rates=fxr)
+assert abs(float(npv_fix)) < 1e8
+```
+
+### Cashflows with Settlement Columns
+
+NDIRS cashflows include FX rate and settlement amount columns:
+
+```python continuation
+cf = ndirs.cashflows(curves=[usd_curve, brl_curve, brl_curve], fx_rates=fxr)
+assert len(cf) > 0
+```
+
+## NDXCS -- Non-Deliverable Cross-Currency Swap
+
+An NDXCS is a cross-currency swap where one leg is non-deliverable.
+Cashflows on the ND leg are converted via per-period FX fixings and
+settled in the convertible currency. Supports notional exchanges and
+MTM resets.
+
+### Construction
+
+```bash
+ndxcs = NDXCS(
+    effective=datetime.date(2025, 6, 16),
+    termination="2Y",
+    leg1_currency="USD",
+    leg2_currency="BRL",
+    settlement_currency="usd",
+    nd_leg=2,
+    pair="usdbrl",
+    leg1_notional=1_000_000.0,
+    leg2_notional=5_200_000.0,
+    initial_fx_rate=5.2,
+    frequency="q",
+    convention="act360",
+    notional_exchange=True,
+)
+```
+
+### Pricing
+
+NDXCS uses 4 curves (leg1 disc/forecast, leg2 disc/forecast) plus FXRates:
+
+```bash
+rate = ndxcs.rate(usd_curve, usd_curve, brl_curve, brl_curve, fxr)
+npv = ndxcs.npv(usd_curve, usd_curve, brl_curve, brl_curve, fxr)
+assert abs(float(rate)) < 500
+assert abs(float(npv)) < 1e8
+```
+
+### Spec-Based Construction
+
+Five market convention specs are available:
+
+```bash
+ndxcs_spec = NDXCS(
+    spec="usdbrl_ndxcs",
+    effective=datetime.date(2025, 6, 16),
+    termination="1Y",
+    leg1_notional=1_000_000.0,
+    leg2_notional=5_200_000.0,
+    initial_fx_rate=5.2,
+)
+assert ndxcs_spec is not None
+```
+
+### FX Fixings for Notional Exchanges
+
+The same `fx_fixings` dict covers period cashflows, notional exchanges, and
+MTM resets. Pass a known fixing for the exchange date:
+
+```bash
+ndxcs_fix = NDXCS(
+    effective=datetime.date(2025, 6, 16),
+    termination="1Y",
+    leg1_currency="USD",
+    leg2_currency="BRL",
+    settlement_currency="usd",
+    nd_leg=2,
+    pair="usdbrl",
+    leg1_notional=1_000_000.0,
+    leg2_notional=5_200_000.0,
+    initial_fx_rate=5.2,
+    fx_fixings={datetime.date(2025, 6, 16): 5.20},
+)
+npv_fix = ndxcs_fix.npv(usd_curve, usd_curve, brl_curve, brl_curve, fxr)
+assert abs(float(npv_fix)) < 1e8
+```
+
+### Cashflows
+
+```bash
+cf = ndxcs.cashflows(usd_curve, usd_curve, brl_curve, brl_curve, fxr)
+assert len(cf) > 0
+```
+
+## JSON Serialization
+
+All ND instruments support JSON serialization:
+
+```python continuation
+json_str = ndf.to_json()
+assert isinstance(json_str, str) and len(json_str) > 10
+ndf_rt = NDF.from_json(json_str)
+npv_rt = ndf_rt.npv(usd_curve, brl_curve, fxr)
+assert abs(float(ndf.npv(usd_curve, brl_curve, fxr)) - float(npv_rt)) < 1e-6
+```
+
+NDIRS also supports round-trip serialization:
+
+```python continuation
+ndirs_json = ndirs.to_json()
+ndirs_rt = NDIRS.from_json(ndirs_json)
+npv_orig = ndirs.npv(curves=[usd_curve, brl_curve, brl_curve], fx_rates=fxr)
+npv_rt = ndirs_rt.npv(curves=[usd_curve, brl_curve, brl_curve], fx_rates=fxr)
+assert abs(float(npv_orig) - float(npv_rt)) < 1e-6
+```
+
+## AD Support and Risk
+
+All ND instruments return AD-enabled types for automatic differentiation.
+FXRates creates Dual variables, enabling delta and gamma computation:
+
+```python continuation
+rate_val = ndf.rate(usd_curve, brl_curve, fxr)
+# rate_val is Dual when FXRates uses AD -- float(rate_val) extracts the real part
+assert math.isfinite(float(rate_val))
+```

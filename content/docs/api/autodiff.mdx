@@ -1,0 +1,174 @@
+---
+title: "Autodiff"
+description: "Forward-mode automatic differentiation types for computing exact derivatives. `Dual` tracks first-order derivatives (gradient), `Dual2` tracks both first and second-order derivatives (gradient and Hessian). For a conceptual introduction to when and why these types appear, see the [type system guide](../getting-started/type-system.md)."
+---
+
+Forward-mode automatic differentiation types for computing exact derivatives. `Dual` tracks first-order derivatives (gradient), `Dual2` tracks both first and second-order derivatives (gradient and Hessian). For a conceptual introduction to when and why these types appear, see the [type system guide](../getting-started/type-system).
+
+## Dual
+
+First-order dual number for forward-mode automatic differentiation.
+
+### Constructor
+
+```bash
+d = Dual(var, real)
+```
+
+| Name   | Type    | Default  | Description   |
+| ------ | ------- | -------- | ------------- |
+| `var`  | `str`   | required | Variable name |
+| `real` | `float` | required | Real value    |
+
+### Static Methods
+
+#### new_multi_py
+
+Create a dual number tracking multiple variables at once.
+
+```bash
+d = Dual.new_multi_py(real, vars, dual=None)
+```
+
+| Name   | Type                    | Default  | Description                                   |
+| ------ | ----------------------- | -------- | --------------------------------------------- |
+| `real` | `float`                 | required | Real value                                    |
+| `vars` | `List[str]`             | required | Variable names                                |
+| `dual` | `Optional[List[float]]` | `None`   | Derivative seed values (defaults to identity) |
+
+### Properties
+
+| Property | Type        | Description                     |
+| -------- | ----------- | ------------------------------- |
+| `.real`  | `float`     | The real (scalar) value         |
+| `.vars`  | `List[str]` | Variable names this dual tracks |
+
+### Methods
+
+| Method        | Returns         | Description                                                     |
+| ------------- | --------------- | --------------------------------------------------------------- |
+| `.gradient()` | `numpy.ndarray` | First-order partial derivatives as 1D array, ordered by `.vars` |
+| `.exp()`      | `Dual`          | Exponential with AD propagation                                 |
+| `.log()`      | `Dual`          | Natural logarithm with AD propagation                           |
+
+### Operators
+
+| Operator    | Left   | Right           | Result  |
+| ----------- | ------ | --------------- | ------- |
+| `+`         | `Dual` | `Dual \| float` | `Dual`  |
+| `-`         | `Dual` | `Dual \| float` | `Dual`  |
+| `*`         | `Dual` | `Dual \| float` | `Dual`  |
+| `/`         | `Dual` | `Dual \| float` | `Dual`  |
+| `**`        | `Dual` | `float`         | `Dual`  |
+| `-` (unary) | `Dual` |                 | `Dual`  |
+| `float()`   | `Dual` |                 | `float` |
+
+All binary operators also support `float` on the left side (`__radd__`, `__rsub__`, `__rmul__`, `__rtruediv__`).
+
+### Examples
+
+Basic gradient computation:
+
+```python
+from vade import Dual
+
+# Create dual numbers for two variables
+x = Dual("x", 3.0)
+y = Dual("y", 4.0)
+
+# Compute f(x, y) = x^2 + x*y
+f = x ** 2.0 + x * y
+print(f.real)       # 21.0
+print(f.vars)       # ['x', 'y']
+print(f.gradient())  # [10.  3.] -- df/dx=2x+y=10, df/dy=x=3
+```
+
+Multi-variable dual with explicit seed:
+
+```python
+from vade import Dual
+
+d = Dual.new_multi_py(2.0, ["a", "b"], [1.0, 0.0])
+result = d.exp()
+print(round(result.real, 6))  # 7.389056
+print(round(float(result.gradient()[0]), 6))  # 7.389056 -- d(e^x)/dx = e^x
+```
+
+## Dual2
+
+Second-order dual number for forward-mode automatic differentiation. Tracks both first and second-order derivatives in a single forward pass.
+
+### Constructor
+
+```bash
+d = Dual2(var, real)
+```
+
+| Name   | Type    | Default  | Description   |
+| ------ | ------- | -------- | ------------- |
+| `var`  | `str`   | required | Variable name |
+| `real` | `float` | required | Real value    |
+
+### Static Methods
+
+#### new_multi_py
+
+Create a second-order dual number tracking multiple variables.
+
+```bash
+d = Dual2.new_multi_py(real, vars, dual=None, dual2=None)
+```
+
+| Name    | Type                    | Default  | Description                          |
+| ------- | ----------------------- | -------- | ------------------------------------ |
+| `real`  | `float`                 | required | Real value                           |
+| `vars`  | `List[str]`             | required | Variable names                       |
+| `dual`  | `Optional[List[float]]` | `None`   | First-order derivative seed values   |
+| `dual2` | `Optional[List[float]]` | `None`   | Half-Hessian seed values (flattened) |
+
+### Properties
+
+| Property | Type        | Description                     |
+| -------- | ----------- | ------------------------------- |
+| `.real`  | `float`     | The real (scalar) value         |
+| `.vars`  | `List[str]` | Variable names this dual tracks |
+
+### Methods
+
+| Method         | Returns         | Description                                                          |
+| -------------- | --------------- | -------------------------------------------------------------------- |
+| `.gradient()`  | `numpy.ndarray` | First-order partial derivatives as 1D array                          |
+| `.gradient2()` | `numpy.ndarray` | Full Hessian matrix as 2D array (returns 2x the stored half-Hessian) |
+| `.exp()`       | `Dual2`         | Exponential with AD propagation                                      |
+| `.log()`       | `Dual2`         | Natural logarithm with AD propagation                                |
+
+### Operators
+
+| Operator    | Left    | Right            | Result  |
+| ----------- | ------- | ---------------- | ------- |
+| `+`         | `Dual2` | `Dual2 \| float` | `Dual2` |
+| `-`         | `Dual2` | `Dual2 \| float` | `Dual2` |
+| `*`         | `Dual2` | `Dual2 \| float` | `Dual2` |
+| `/`         | `Dual2` | `Dual2 \| float` | `Dual2` |
+| `**`        | `Dual2` | `float`          | `Dual2` |
+| `-` (unary) | `Dual2` |                  | `Dual2` |
+| `float()`   | `Dual2` |                  | `float` |
+
+All binary operators also support `float` on the left side (`__radd__`, `__rsub__`, `__rmul__`, `__rtruediv__`).
+
+### Example
+
+```python
+from vade import Dual2
+
+# Second-order derivatives: f(x) = x^3
+x = Dual2("x", 2.0)
+f = x ** 3.0
+print(f.real)        # 8.0
+print(f.gradient())  # [12.] -- df/dx = 3x^2 = 12
+print(f.gradient2()) # [[12.]] -- d2f/dx2 = 6x = 12
+```
+
+---
+
+See [Numerical](numerical) for root-finding solvers that accept AD-computed derivatives via `newton_raphson_solve`.

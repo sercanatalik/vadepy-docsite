@@ -1,0 +1,45 @@
+---
+title: "Rates"
+description: "Vade's rates analytics cover interest rate curve construction, instrument pricing, risk sensitivities, and volatility products. Build discount and forward curves from market data, price linear and non-linear derivatives, and compute AD-powered greeks -- all from a single calibrated curve object."
+---
+
+Vade's rates analytics cover interest rate curve construction, instrument pricing, risk sensitivities, and volatility products. Build discount and forward curves from market data, price linear and non-linear derivatives, and compute AD-powered greeks -- all from a single calibrated curve object.
+
+---
+
+## What's Covered
+
+- **Curves** -- DiscountCurve, ForwardCurve, LineCurve with configurable interpolation (log-linear, log-cubic, linear-zero)
+- **Parametric curves** -- NelsonSiegel, NelsonSiegelSvensson, SmithWilson analytical models
+- **Linear instruments** -- IRS, FRA, ZCS, OIS, Deposit, IRFuture
+- **Non-linear instruments** -- CapFloor (caps and floors with Black-76 and Bachelier models)
+- **Calibration** -- Multi-instrument Solver (Levenberg-Marquardt, Gauss-Newton, gradient descent) and single-curve bootstrap
+- **Risk** -- AD-based delta, gamma, and tenor-bucketed sensitivities via IRImpliedCurve
+
+## Key Concepts
+
+- **Discount factor** -- the present value of one unit of currency received at a future date, derived from the calibrated curve
+- **Forward rate** -- the implied interest rate between two future dates, extracted from the discount curve
+- **Swap rate** -- the fixed rate that makes an interest rate swap's NPV zero at inception
+- **Day count convention** -- the rule for counting accrued days between dates (act360, act365f, 30360)
+- **Interpolation** -- the method used to estimate discount factors between known curve nodes
+- **Bootstrap** -- iterative node-by-node curve stripping using root-finding on each instrument in sequence
+- **Par rate** -- the coupon rate at which an instrument prices to par (NPV = 0)
+- **Zero rate** -- the continuously compounded rate implied by a single discount factor over a given tenor
+
+## Quick Taste
+
+```python
+spot = float(calibrated.discount_factor(effective))
+fwd_1y = float(calibrated.discount_factor(datetime.date(2026, 6, 16)))
+# Discount factor decays from 1.0 as tenor increases
+assert spot > fwd_1y
+```
+
+## Guides
+
+- [Curve Building](curve-building) -- Interpolation method comparison and forward rate profiles from a calibrated DiscountCurve
+- [Bootstrap & Parametric Curves](bootstrap-parametric) -- Node-by-node bootstrap via Brent root-finding and NelsonSiegel analytical models
+- [Pricing](pricing) -- Price IRS, FRA, ZCS, OIS, and Deposit against calibrated curves
+- [Risk](risk) -- AD-based delta, gamma, and tenor-bucketed risk sensitivities
+- [Caps & Floors](capfloor) -- Cap and floor pricing with Black-76 and Bachelier volatility models

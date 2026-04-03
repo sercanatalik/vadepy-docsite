@@ -1,0 +1,233 @@
+---
+title: "Calendar"
+description: "Date scheduling, business day calendars, day count fractions, and tenor arithmetic."
+---
+
+Date scheduling, business day calendars, day count fractions, and tenor arithmetic.
+
+All types are available via flat import:
+
+```bash
+from vade import Schedule, BusinessCalendar, dcf, add_tenor, add_business_days
+```
+
+See [Conventions](../conventions) for all accepted string parameter values.
+
+## Schedule
+
+Financial schedule with regular periods and optional stubs.
+
+```bash
+Schedule(
+    effective,
+    termination,
+    frequency,
+    calendar=None,
+    adjuster="modified_following",
+    roll_day=None,
+    front_stub=None,
+    back_stub=None,
+    stub_inference="short_front",
+)
+```
+
+### Parameters
+
+| Name             | Type                         | Default                | Description                                                                      |
+| ---------------- | ---------------------------- | ---------------------- | -------------------------------------------------------------------------------- |
+| `effective`      | `datetime.date`              | *required*             | Start date of the schedule                                                       |
+| `termination`    | `datetime.date`              | *required*             | End date of the schedule                                                         |
+| `frequency`      | `str`                        | *required*             | Period frequency (`"M"`, `"Q"`, `"S"`, `"A"`, `"Z"`)                             |
+| `calendar`       | `BusinessCalendar` or `None` | `None`                 | Business day calendar (weekends-only if not provided)                            |
+| `adjuster`       | `str`                        | `"modified_following"` | Business day adjustment rule                                                     |
+| `roll_day`       | `str`, `int`, or `None`      | `None`                 | Roll day convention (`"eom"`, `"imm"`, or `1`-`31`)                              |
+| `front_stub`     | `datetime.date` or `None`    | `None`                 | Explicit front stub date                                                         |
+| `back_stub`      | `datetime.date` or `None`    | `None`                 | Explicit back stub date                                                          |
+| `stub_inference` | `str`                        | `"short_front"`        | Stub preference (`"short_front"`, `"long_front"`, `"short_back"`, `"long_back"`) |
+
+See [Conventions](../conventions) for all accepted values for `frequency`, `adjuster`, `roll_day`, and `stub_inference`.
+
+### Properties
+
+| Property            | Type                  | Description                      |
+| ------------------- | --------------------- | -------------------------------- |
+| `.unadjusted_dates` | `list[datetime.date]` | Unadjusted period boundary dates |
+| `.adjusted_dates`   | `list[datetime.date]` | Adjusted period boundary dates   |
+| `.n_periods`        | `int`                 | Number of periods                |
+
+### Methods
+
+| Method              | Returns | Description                           |
+| ------------------- | ------- | ------------------------------------- |
+| `.has_front_stub()` | `bool`  | Whether the schedule has a front stub |
+| `.has_back_stub()`  | `bool`  | Whether the schedule has a back stub  |
+
+### Example
+
+```python
+import datetime
+from vade import Schedule, BusinessCalendar
+
+schedule = Schedule(
+    effective=datetime.date(2024, 1, 15),
+    termination=datetime.date(2025, 1, 15),
+    frequency="Q",
+    calendar=BusinessCalendar("NYC"),
+)
+
+schedule.n_periods  # 4
+schedule.adjusted_dates  # [datetime.date(2024, 1, 16), datetime.date(2024, 4, 15), datetime.date(2024, 7, 15), datetime.date(2024, 10, 15), datetime.date(2025, 1, 15)]
+schedule.has_front_stub()  # False
+schedule.has_back_stub()  # False
+```
+
+Note: the effective date 2024-01-15 (Martin Luther King Jr. Day) is adjusted to 2024-01-16 in the adjusted dates.
+
+## BusinessCalendar
+
+Business day calendar with holidays and weekend conventions.
+
+```bash
+BusinessCalendar(name)
+```
+
+### Parameters
+
+| Name   | Type  | Default    | Description                                                 |
+| ------ | ----- | ---------- | ----------------------------------------------------------- |
+| `name` | `str` | *required* | Named calendar identifier (e.g., `"NYC"`, `"LDN"`, `"TGT"`) |
+
+See [Conventions](../conventions#named-calendars) for all named calendars.
+
+### Static Methods
+
+#### `BusinessCalendar.new_custom(holidays, weekmask)`
+
+Create a custom calendar with explicit holidays and weekend mask.
+
+| Name       | Type        | Default    | Description                                     |
+| ---------- | ----------- | ---------- | ----------------------------------------------- |
+| `holidays` | `list[str]` | *required* | Holiday dates as `"YYYY-MM-DD"` strings         |
+| `weekmask` | `list[int]` | *required* | Weekend day numbers (`0`=Mon, `5`=Sat, `6`=Sun) |
+
+### Methods
+
+| Method                       | Returns            | Description                                                       |
+| ---------------------------- | ------------------ | ----------------------------------------------------------------- |
+| `.is_holiday(date)`          | `bool`             | Check if a date is a holiday                                      |
+| `.is_business_day(date)`     | `bool`             | Check if a date is a business day                                 |
+| `.bus_day_count(start, end)` | `int`              | Count business days between start (inclusive) and end (exclusive) |
+| `.union_cal(other)`          | `BusinessCalendar` | Create a union calendar (holiday from either calendar)            |
+
+### Example
+
+```python
+import datetime
+from vade import BusinessCalendar
+
+nyc = BusinessCalendar("NYC")
+nyc.is_business_day(datetime.date(2024, 12, 25))  # False
+nyc.is_holiday(datetime.date(2024, 12, 25))  # True
+nyc.bus_day_count(datetime.date(2024, 1, 1), datetime.date(2024, 1, 31))  # 20
+
+ldn = BusinessCalendar("LDN")
+combined = nyc.union_cal(ldn)
+combined.is_business_day(datetime.date(2024, 12, 26))  # False (Boxing Day in LDN)
+nyc.is_business_day(datetime.date(2024, 12, 26))  # True (not a NYC holiday)
+
+custom = BusinessCalendar.new_custom(["2024-03-01"], [5, 6])
+custom.is_holiday(datetime.date(2024, 3, 1))  # True
+```
+
+## dcf
+
+Compute the day count fraction between two dates.
+
+```bash
+dcf(convention, start, end, calendar=None, termination=None)
+```
+
+### Parameters
+
+| Name          | Type                         | Default    | Description                                                      |
+| ------------- | ---------------------------- | ---------- | ---------------------------------------------------------------- |
+| `convention`  | `str`                        | *required* | Day count convention (e.g., `"act360"`, `"act365f"`, `"30/360"`) |
+| `start`       | `datetime.date`              | *required* | Start date                                                       |
+| `end`         | `datetime.date`              | *required* | End date                                                         |
+| `calendar`    | `BusinessCalendar` or `None` | `None`     | Required for `"bus252"` convention                               |
+| `termination` | `datetime.date` or `None`    | `None`     | Required for `"30e/360isda"` convention                          |
+
+See [Conventions](../conventions#day-count-conventions) for all accepted conventions.
+
+### Example
+
+```python
+import datetime
+from vade import dcf
+
+start = datetime.date(2024, 1, 15)
+end = datetime.date(2024, 7, 15)
+
+round(dcf("act360", start, end), 10)  # 0.5055555556
+round(dcf("act365f", start, end), 10)  # 0.498630137
+```
+
+## add_tenor
+
+Add a tenor string to a date.
+
+```bash
+add_tenor(date, tenor, calendar=None)
+```
+
+### Parameters
+
+| Name       | Type                         | Default    | Description                                                 |
+| ---------- | ---------------------------- | ---------- | ----------------------------------------------------------- |
+| `date`     | `datetime.date`              | *required* | Base date                                                   |
+| `tenor`    | `str`                        | *required* | Tenor string (e.g., `"2Y"`, `"6M"`, `"1W"`, `"3D"`, `"3B"`) |
+| `calendar` | `BusinessCalendar` or `None` | `None`     | Required for business day tenors (`"NB"`)                   |
+
+See [Conventions](../conventions#tenor-strings) for tenor string format.
+
+### Example
+
+```python
+import datetime
+from vade import add_tenor, BusinessCalendar
+
+base = datetime.date(2024, 1, 15)
+
+add_tenor(base, "6M")  # datetime.date(2024, 7, 15)
+add_tenor(base, "1Y")  # datetime.date(2025, 1, 15)
+add_tenor(base, "3B", BusinessCalendar("NYC"))  # datetime.date(2024, 1, 18)
+```
+
+## add_business_days
+
+Add or subtract business days from a date.
+
+```bash
+add_business_days(date, days, calendar)
+```
+
+### Parameters
+
+| Name       | Type               | Default    | Description                                                   |
+| ---------- | ------------------ | ---------- | ------------------------------------------------------------- |
+| `date`     | `datetime.date`    | *required* | Base date                                                     |
+| `days`     | `int`              | *required* | Number of business days (positive forward, negative backward) |
+| `calendar` | `BusinessCalendar` | *required* | Business day calendar                                         |
+
+### Example
+
+```python
+import datetime
+from vade import add_business_days, BusinessCalendar
+
+nyc = BusinessCalendar("NYC")
+base = datetime.date(2024, 1, 15)
+
+add_business_days(base, 2, nyc)  # datetime.date(2024, 1, 17)
+add_business_days(base, -2, nyc)  # datetime.date(2024, 1, 11)
+```

@@ -1,0 +1,133 @@
+---
+title: "Callable Bonds"
+description: "Price callable bonds using a Hull-White one-factor short-rate model with"
+---
+
+Price callable bonds using a Hull-White one-factor short-rate model with
+trinomial tree pricing. Compute option-adjusted spreads (OAS) and
+tree-based risk measures (effective duration, effective convexity, vega).
+
+---
+
+## Setup
+
+Create a 5-year annual coupon bond with a call schedule allowing the issuer to
+redeem at par starting in year 2. We build a flat discount curve using
+continuous compounding for the tree pricer.
+
+```python
+import datetime
+import math
+from vade import FixedRateBond, CallableBond, DiscountCurve
+
+effective = datetime.date(2024, 1, 1)
+
+# Flat discount curve (3% continuously compounded)
+nodes = {effective: 1.0}
+for y in range(1, 11):
+    d = datetime.date(2024 + y, 1, 1)
+    nodes[d] = math.exp(-0.03 * y)
+
+curve = DiscountCurve(
+    nodes,
+    interpolation="log_linear",
+    convention="act365f",
+    id="hw_curve",
+)
+
+# Underlying non-callable bond
+bond = FixedRateBond(
+    effective=effective,
+    termination="5y",
+    coupon=0.04,
+    frequency="a",
+    face_value=100.0,
+)
+
+# Callable bond: issuer can call at par from year 2 onward
+cb = CallableBond(
+    bond=bond,
+    call_schedule=[
+        (datetime.date(2026, 1, 1), 100.0),
+        (datetime.date(2027, 1, 1), 100.0),
+        (datetime.date(2028, 1, 1), 100.0),
+    ],
+)
+
+assert repr(cb) == "CallableBond(...)"
+```
+
+## Tree Pricing
+
+The Hull-White trinomial tree discretizes the short-rate process and values the
+bond backward from maturity, accounting for call exercise at each node.
+Parameter `a` is the mean reversion speed and `sigma` is the short-rate
+volatility.
+
+See [CallableBond](../../api/instruments#callablebond) API reference.
+
+```python continuation
+callable_price = cb.tree_price(curves=curve, a=0.1, sigma=0.01)
+
+assert math.isfinite(callable_price)
+assert 50.0 < callable_price < 150.0
+
+# The callable price should be at most the non-callable price,
+# since the call option benefits the issuer (not the holder)
+noncallable_price = float(bond.dirty_price(curve))
+assert math.isfinite(noncallable_price)
+```
+
+## Option-Adjusted Spread
+
+OAS is the constant spread added to the tree's forward rates that equates the
+model price to the observed market price. It measures the bond's yield premium
+after removing the embedded call option cost. A positive OAS means the bond
+trades cheap relative to the model.
+
+```python continuation
+# Use a market price slightly below model price (bond trades cheap)
+market_price = callable_price - 0.5
+oas_val = cb.oas(curves=curve, market_price=market_price, a=0.1, sigma=0.01)
+
+assert math.isfinite(oas_val)
+assert oas_val > 0  # cheaper market price => positive OAS
+
+# When market_price equals model price, OAS should be ~0
+oas_zero = cb.oas(curves=curve, market_price=callable_price, a=0.1, sigma=0.01)
+assert abs(oas_zero) < 1e-4
+```
+
+## Effective Duration and Convexity
+
+For callable bonds, modified duration is not meaningful because future cashflows
+depend on whether the issuer exercises the call. Effective duration uses
+finite-difference bump-and-reprice on the tree to capture the impact of
+optionality on rate sensitivity.
+
+```python continuation
+eff_dur = cb.effective_duration(curves=curve, a=0.1, sigma=0.01)
+eff_cvx = cb.effective_convexity(curves=curve, a=0.1, sigma=0.01)
+
+assert math.isfinite(eff_dur)
+assert eff_dur > 0
+assert math.isfinite(eff_cvx)
+```
+
+## Vega
+
+Vega measures the sensitivity of the callable bond price to changes in
+short-rate volatility. A higher vol increases the value of the embedded call
+option, reducing the callable bond price for the holder.
+
+```python continuation
+v = cb.vega(curves=curve, a=0.1, sigma=0.01)
+
+assert math.isfinite(v)
+```
+
+## Next Steps
+
+- [Spread Analytics](spread-analytics) -- I-spread and asset swap analysis
+- [Fitted Curves](fitted-curves) -- Parametric curve fitting
+- [Bonds](bonds) -- Core bond analytics

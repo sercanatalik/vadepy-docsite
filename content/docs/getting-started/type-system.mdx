@@ -1,0 +1,186 @@
+---
+title: "Type System"
+description: "Vade uses automatic differentiation (AD) to compute exact derivatives for"
+---
+
+Vade uses automatic differentiation (AD) to compute exact derivatives for
+risk sensitivities like delta and gamma. This page explains when and why you
+encounter AD types in vade, and how to work with them. For full method
+signatures, see the [Autodiff API reference](../api/autodiff).
+
+## What is Automatic Differentiation?
+
+Automatic differentiation computes exact derivatives by propagating derivative
+information through every arithmetic operation. Unlike finite differences
+(which approximate derivatives by bumping inputs) or symbolic differentiation
+(which manipulates algebraic expressions), AD gives machine-precision results
+with minimal overhead.
+
+Why this matters for quantitative finance: delta, gamma, and bucket-level risk
+sensitivities all require derivatives of instrument prices with respect to
+market inputs (discount factors, rates, spreads). AD computes these
+derivatives as a natural byproduct of the pricing calculation -- no extra
+bumps, no approximation error.
+
+Vade implements **forward-mode** AD via dual numbers. Two types are provided:
+`Dual` for first-order derivatives (gradients) and `Dual2` for first and
+second-order derivatives (gradients and Hessians).
+
+## Dual Numbers
+
+A [Dual](../api/autodiff#dual) number is "a number that remembers what it
+depends on." It carries a real value alongside a gradient vector tracking how
+that value changes with respect to named variables.
+
+Create a dual number with a variable name and value:
+
+```python
+d = Dual("x", 3.0)
+print(d.real)        # 3.0
+print(d.vars)        # ['x']
+print(d.gradient())  # [1.]  -- derivative of x with respect to x is 1
+```
+
+Arithmetic operations propagate derivatives automatically:
+
+```python continuation
+result = d * d  # x^2
+print(result.real)        # 9.0
+print(result.gradient())  # [6.]  -- d/dx(x^2) = 2x = 6.0
+```
+
+Multi-variable expressions track all dependencies:
+
+```python continuation
+y = Dual("y", 4.0)
+f = d * y + d ** 2.0  # x*y + x^2
+print(f.real)        # 21.0
+print(f.vars)        # ['x', 'y']
+print(f.gradient())  # [10.  3.]  -- df/dx = y + 2x = 10, df/dy = x = 3
+```
+
+When you need a plain number from a Dual result, use `float()`:
+
+```python continuation
+plain = float(result)
+print(type(plain).__name__)  # float
+print(plain)                 # 9.0
+```
+
+## Dual2 Numbers
+
+[Dual2](../api/autodiff#dual2) extends dual numbers to track second-order
+derivatives. This is needed for gamma risk (the second derivative of price
+with respect to rates).
+
+```python
+d2 = Dual2("x", 3.0)
+result = d2 * d2  # x^2
+print(result.real)        # 9.0
+print(result.gradient())  # [6.]   -- first derivative: d/dx(x^2) = 2x = 6
+print(result.gradient2()) # [[2.]] -- second derivative: d^2/dx^2(x^2) = 2
+```
+
+Higher-order chain rule propagation works automatically:
+
+```python continuation
+cubic = d2 ** 3.0  # x^3
+print(cubic.real)        # 27.0
+print(cubic.gradient())  # [27.]   -- d/dx(x^3) = 3x^2 = 27
+print(cubic.gradient2()) # [[18.]] -- d^2/dx^2(x^3) = 6x = 18
+```
+
+Dual2 is more expensive than Dual (it stores an n-by-n half-Hessian matrix
+in addition to the n-element gradient), so it is only used when second-order
+risk is needed.
+
+## Union Return Types
+
+This is the most distinctive part of vade's type system. Curve methods like
+`discount_factor()`, `zero_rate()`, and `forward_rate()` return
+`Union[float, Dual, Dual2]` rather than a plain `float`. The return type
+depends on the types of the curve's node values.
+
+**Float nodes produce float outputs** -- no derivative tracking:
+
+```python
+import datetime
+
+curve_f = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.96},
+    interpolation="log_linear",
+)
+df = curve_f.discount_factor(datetime.date(2024, 7, 1))
+print(type(df).__name__)  # float
+```
+
+**Dual nodes produce Dual outputs** -- first-order derivatives available:
+
+```python continuation
+curve_d = DiscountCurve(
+    {datetime.date(2024, 1, 1): Dual("v0", 1.0), datetime.date(2025, 1, 1): Dual("v1", 0.96)},
+    interpolation="log_linear",
+)
+df_d = curve_d.discount_factor(datetime.date(2024, 7, 1))
+print(type(df_d).__name__)  # Dual
+print(round(df_d.real, 6))  # same numeric value as float case
+print(df_d.vars)             # ['v1', 'v0'] -- tracks both node variables
+```
+
+**Dual2 nodes produce Dual2 outputs** -- first and second-order derivatives:
+
+```python continuation
+curve_d2 = DiscountCurve(
+    {datetime.date(2024, 1, 1): Dual2("v0", 1.0), datetime.date(2025, 1, 1): Dual2("v1", 0.96)},
+    interpolation="log_linear",
+)
+df_d2 = curve_d2.discount_factor(datetime.date(2024, 7, 1))
+print(type(df_d2).__name__)  # Dual2
+print(len(df_d2.gradient()))  # 2 -- gradient w.r.t. both node variables
+```
+
+The pattern is consistent across all curve types:
+[DiscountCurve](../api/curves#discountcurve),
+[LineCurve](../api/curves#linecurve), and composite curves all follow
+the same rule. The input node type determines the output type.
+
+## AD in Practice
+
+You rarely create Dual-valued curves manually. The
+[Solver](../api/solver#solver) does this automatically during calibration:
+it replaces your initial float node values with Dual (or Dual2) numbers,
+solves for the correct values, and returns a calibrated curve whose nodes
+carry derivative information.
+
+```bash
+# After solver.iterate(), calibrated curve has Dual-valued nodes.
+# Any pricing operation on this curve returns Dual results:
+npv = instrument.npv(curves)       # npv is a Dual
+npv.gradient()                     # derivatives w.r.t. each curve node
+
+# The Solver.delta() method extracts these into a structured report:
+delta_df = solver.delta()          # Polars DataFrame with risk by instrument
+```
+
+See the [Risk guide](../guides/rates/risk) for a complete worked example of
+delta and gamma computation from a calibrated solver.
+
+When you need a plain number from any AD result, wrap with `float()`:
+
+```bash
+rate = float(instrument.rate(curves))  # strips AD, returns plain float
+```
+
+## Summary
+
+| Type    | Tracks                       | Use Case             | Created By              |
+| ------- | ---------------------------- | -------------------- | ----------------------- |
+| `float` | Nothing                      | Plain computation    | Default node values     |
+| `Dual`  | First derivatives (gradient) | Delta risk           | Solver calibration      |
+| `Dual2` | First + second derivatives   | Delta + gamma risk   | Solver with Dual2 nodes |
+
+The key insight: **you choose the level of derivative tracking by choosing
+the node value type.** Float nodes give you fast, derivative-free pricing.
+Dual nodes give you delta. Dual2 nodes give you delta and gamma. The same
+compiled Rust code handles all three -- no separate "bumped" pricing pass
+is needed.

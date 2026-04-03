@@ -1,0 +1,388 @@
+---
+title: "Roadmap"
+description: "This page outlines planned features for Vade, organized by product area. Items are prioritized but timelines are not committed -- development order may shift based on user demand and technical dependencies. For documentation on currently available features, see the [main index](index.md)."
+---
+
+This page outlines planned features for Vade, organized by product area. Items are prioritized but timelines are not committed -- development order may shift based on user demand and technical dependencies. For documentation on currently available features, see the [main index](index).
+
+**Status Legend**
+- **Planned** -- Designed and scoped; implementation not yet started
+- **In Development** -- Actively being built
+- **Future** -- On the long-term radar; scope may evolve
+
+______________________________________________________________________
+
+## Rates
+
+### Swaptions
+
+**Status:** Planned
+
+European and Bermudan swaption pricing with Black-76 and Bachelier models, building on Vade's existing interest rate swap and volatility infrastructure.
+
+**Scope**
+- Swaption construction from underlying swap specifications (tenor, frequency, fixed rate)
+- Implied volatility surface support (expiry x tenor)
+- Exercise boundary determination for Bermudan swaptions
+
+**Use Cases**
+- Rates volatility trading desks pricing swaption books against calibrated vol surfaces
+- Hedging callable bond optionality by decomposing into swaption exposures
+
+**Expected Capabilities**
+- Swaption NPV for payer and receiver styles
+- Delta and gamma via automatic differentiation
+- Vol surface interpolation across expiry and tenor dimensions
+- Cash-settled and physical settlement support
+
+### Structured Rate Notes
+
+**Status:** Future
+
+Structured notes with embedded interest rate optionality, including range accruals, inverse floaters, and snowball coupons.
+
+**Scope**
+- Note construction from coupon schedules with embedded option logic
+- Path-dependent coupon accrual rules (range accrual barriers, inverse floater caps/floors)
+- Snowball and ratchet coupon mechanics
+
+**Use Cases**
+- Structuring desks creating bespoke rate-linked notes for institutional investors
+- Buy-side portfolio managers analyzing structured note holdings and their embedded risks
+
+**Expected Capabilities**
+- Structured note pricing under given rate and vol assumptions
+- Coupon scenario analysis across rate paths
+- Sensitivity to rate curve and volatility surface inputs
+
+______________________________________________________________________
+
+## Credit
+
+### Credit Linked Notes
+
+**Status:** Future
+
+Notes whose redemption is contingent on credit events of a reference entity or basket, combining funded note economics with credit derivative payoffs.
+
+**Scope**
+- CLN construction linking note cashflows to CDS-style credit protection
+- Single-name and first-to-default basket variants
+- Recovery rate and credit event settlement mechanics
+
+**Use Cases**
+- Credit desks creating funded credit exposure as an alternative to unfunded CDS
+- Investors seeking enhanced yield with embedded credit risk and defined loss profiles
+
+**Expected Capabilities**
+- CLN pricing given credit curve, funding curve, and recovery assumptions
+- Recovery rate sensitivity analysis
+- Break-even spread calculation relative to equivalent unfunded CDS protection
+
+______________________________________________________________________
+
+## FX
+
+### Full EMTA FX NDF Templates
+
+**Status:** Planned
+
+Complete set of EMTA-standard NDF templates covering all emerging market currency pairs with official fixing sources and settlement conventions.
+
+**Scope**
+- Pre-built specs for all EMTA-published currency pairs (BRL, CNY, INR, KRW, TWD, and others)
+- Automatic fixing source and settlement date resolution per EMTA definitions
+- Integration with Vade's existing NDF pricing infrastructure
+
+**Use Cases**
+- EM FX trading desks pricing NDFs without manual convention lookup
+- Operations teams validating settlement terms against EMTA standards
+
+**Expected Capabilities**
+- NDF construction from currency pair alone using EMTA defaults
+- Fixing source registry mapping each pair to its official rate source
+- Settlement calendar integration for each currency pair
+
+______________________________________________________________________
+
+## Financing
+
+### Repo
+
+**Status:** Future
+
+Repurchase agreement pricing with haircut, margin, and collateral valuation for both term and open repo structures.
+
+**Scope**
+- Classic repo and open repo construction
+- Haircut application to collateral market value
+- Accrued interest calculation on repo rate
+
+**Use Cases**
+- Repo desks calculating funding costs for inventory financing
+- Treasury teams managing short-term liquidity and collateral allocation
+
+**Expected Capabilities**
+- Repo NPV and accrued interest
+- Implied repo rate derivation
+- Margin call trigger calculation
+- Term and open repo support
+
+### Reverse Repo
+
+**Status:** Future
+
+Reverse repurchase agreements from the cash-lending perspective, mirroring repo mechanics from the opposite side of the trade.
+
+**Scope**
+- Reverse repo as the mirror of repo -- same mechanics, opposite position
+- Cash deployment against collateral with haircut protection
+
+**Use Cases**
+- Money market funds deploying cash against high-quality collateral
+- Central bank reverse repo facility modeling and rate analysis
+
+**Expected Capabilities**
+- Reverse repo NPV and yield calculation
+- Collateral eligibility checks and haircut application
+- Integration with repo for net position analysis
+
+### Securities Lending
+
+**Status:** Future
+
+Securities lending with fee schedules, collateral management, and utilization tracking for generating incremental portfolio returns.
+
+**Scope**
+- Lending fee accrual on borrowed securities
+- Collateral substitution and eligibility rules
+- Recall and return mechanics
+
+**Use Cases**
+- Asset managers generating incremental returns from long portfolios through lending programs
+- Prime brokers managing borrow inventory and locates
+
+**Expected Capabilities**
+- Lending fee calculation and accrual
+- Utilization rate tracking across inventory
+- Collateral coverage ratio monitoring
+
+### CLOs
+
+**Status:** Future
+
+Collateralized loan obligation tranche modeling with waterfall mechanics, overcollateralization tests, and cashflow projection.
+
+**Scope**
+- Tranche construction from pool characteristics and attachment/detachment points
+- Priority-of-payments waterfall execution
+- Overcollateralization (OC) and interest coverage (IC) test evaluation
+
+**Use Cases**
+- CLO managers structuring new deals and sizing tranches
+- Investors analyzing tranche risk-return profiles across the capital structure
+
+**Expected Capabilities**
+- Tranche cashflow projection under base and stress scenarios
+- Waterfall simulation with diversion triggers
+- Tranche spread, yield, and weighted average life
+- OC and IC test monitoring with breach detection
+
+### CDOs
+
+**Status:** Future
+
+Collateralized debt obligation modeling with synthetic and cash variants, including correlation-sensitive tranche pricing.
+
+**Scope**
+- CDO tranche pricing from reference portfolio credit curves
+- Correlation modeling for synthetic CDO tranches (base correlation framework)
+- Cash CDO waterfall mechanics
+
+**Use Cases**
+- Correlation trading desks pricing bespoke tranches and delta-hedging
+- Risk managers assessing portfolio credit concentration through tranche analysis
+
+**Expected Capabilities**
+- Tranche expected loss and fair spread calculation
+- Base correlation mapping and interpolation
+- Spread sensitivity to individual name and correlation changes
+- Default scenario analysis across the portfolio
+
+### ABS
+
+**Status:** Future
+
+Asset-backed securities with prepayment and default modeling, projecting pool cashflows through tranche waterfalls under stress scenarios.
+
+**Scope**
+- ABS cashflow projection from pool-level assumptions (CPR, CDR, loss severity)
+- Tranche allocation via priority-of-payments waterfall
+- Prepayment model integration (constant and variable CPR)
+
+**Use Cases**
+- ABS investors projecting cashflows under base and stress scenarios for relative value
+- Originators sizing tranches and credit enhancement for new issuance
+
+**Expected Capabilities**
+- Pool-level cashflow generation with prepayment and default
+- Tranche yield, weighted average life, and duration
+- Scenario analysis across CPR, CDR, and severity assumptions
+
+### Syndicated Loans
+
+**Status:** Future
+
+Multi-lender loan facilities with drawdown schedules, amortization, and fee structures for term loans and revolvers.
+
+**Scope**
+- Term loan and revolver construction with commitment amounts
+- Amortization schedules (bullet, amortizing, custom)
+- Commitment fees, utilization fees, and facility agent fees
+
+**Use Cases**
+- Loan portfolio managers tracking facility economics and fee income
+- CLO managers modeling underlying loan pool cashflows
+
+**Expected Capabilities**
+- Loan cashflow projection including principal, interest, and fees
+- All-in yield calculation incorporating fee structures
+- Fee accrual and payment date scheduling
+- Prepayment modeling with make-whole provisions
+
+### Bilateral Loans
+
+**Status:** Future
+
+Single-lender loan analytics with flexible repayment schedules, supporting both fixed and floating rate structures.
+
+**Scope**
+- Fixed and floating rate loan construction
+- Custom amortization profiles (equal principal, equal payment, bullet)
+- Prepayment penalty calculation
+
+**Use Cases**
+- Bank lending desks pricing bespoke loans and assessing return on capital
+- Credit analysts evaluating loan economics relative to bond alternatives
+
+**Expected Capabilities**
+- Loan NPV and yield to maturity
+- Duration and convexity measures
+- Amortization schedule generation with payment breakdowns
+
+### Total Return Swaps
+
+**Status:** Future
+
+Derivative providing total economic return of a reference asset in exchange for a funding rate, enabling leveraged or synthetic exposure.
+
+**Scope**
+- TRS construction referencing bonds, loans, or indices
+- Periodic return settlement (price appreciation plus coupon income)
+- Margin and reset mechanics
+
+**Use Cases**
+- Hedge funds gaining leveraged exposure to credit assets without direct ownership
+- Dealers hedging inventory risk through synthetic transfer of economic exposure
+
+**Expected Capabilities**
+- TRS NPV from both total return receiver and payer perspectives
+- Return leg projection from reference asset pricing
+- Funding leg accrual calculation
+- Basis risk analysis between TRS and direct ownership
+
+### Bond Forwards
+
+**Status:** Future
+
+Forward contracts on bond delivery with invoice price calculation, conversion factors, and cheapest-to-deliver analysis.
+
+**Scope**
+- Bond forward construction with delivery date and contract specifications
+- Conversion factors for deliverable bond baskets
+- Cheapest-to-deliver (CTD) identification
+
+**Use Cases**
+- Government bond futures basis traders analyzing delivery option value
+- Portfolio managers locking in forward bond purchases for asset-liability matching
+
+**Expected Capabilities**
+- Forward price calculation incorporating carry and financing
+- CTD identification across deliverable baskets
+- Basis and net basis computation
+- Delivery option valuation
+
+______________________________________________________________________
+
+## Infrastructure
+
+### Portfolio Valuation Engine
+
+**Status:** Planned
+
+A trade store and book structure for holding positions, enabling portfolio-level pricing, mark-to-market, and position lifecycle management.
+
+**Scope**
+- Trade store for persisting instrument positions with metadata
+- Book hierarchy for organizing trades by desk, strategy, or entity
+- Portfolio-level mark-to-market aggregation across books
+- Position lifecycle management (new, amended, closed)
+
+**Use Cases**
+- Trading desks maintaining live position books with real-time valuation
+- Risk managers computing portfolio-level valuations across multiple books
+- Operations teams reconciling positions and tracking trade amendments
+
+**Expected Capabilities**
+- Trade capture and storage with full audit trail
+- Book-level and portfolio-level NPV aggregation
+- Position history tracking and amendment logging
+- Bulk repricing across curves, dates, and scenarios
+
+### Risk and PnL Engine
+
+**Status:** Planned
+
+Portfolio-level risk analytics and PnL computation integrating with the Portfolio Valuation Engine for comprehensive risk management.
+
+**Scope**
+- Value-at-Risk computation (parametric and historical simulation)
+- Scenario analysis and stress testing framework
+- PnL computation across books and desks
+- Integration with Portfolio Valuation Engine position data
+
+**Use Cases**
+- Risk managers producing daily VaR and stress test reports
+- Front-office traders monitoring intraday PnL and risk limit utilization
+- Compliance teams verifying adherence to risk limits and regulatory thresholds
+
+**Expected Capabilities**
+- Parametric and historical simulation VaR
+- User-defined stress scenarios with curve and rate shocks
+- Daily and intraday PnL computation
+- Risk limit monitoring with breach alerting
+- Risk factor decomposition across portfolio dimensions
+
+### PnL Explain
+
+**Status:** Planned
+
+PnL attribution and decomposition breaking down portfolio PnL into its fundamental economic drivers for transparency and control.
+
+**Scope**
+- Carry and roll-down decomposition
+- Curve move attribution (parallel shift, slope change, curvature)
+- Theta and cross-gamma effects
+- New, amended, and closed trade PnL isolation
+
+**Use Cases**
+- Traders understanding daily PnL drivers and validating against market moves
+- Risk managers comparing realized PnL against risk predictions
+- Management reporting on desk-level performance attribution
+
+**Expected Capabilities**
+- First-order and second-order PnL attribution
+- Carry and roll-down separation from market-driven PnL
+- Curve shift decomposition into parallel, slope, and curvature components
+- Trade lifecycle PnL effects (new deal, amendment, maturity)
+- Unexplained PnL residual tracking and investigation support

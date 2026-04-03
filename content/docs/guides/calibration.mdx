@@ -1,0 +1,241 @@
+---
+title: "Calibration"
+description: "Calibrate single and multi-curve frameworks using the [Solver](../api/solver.md#solver) with Levenberg-Marquardt, Gauss-Newton, and gradient descent algorithms."
+---
+
+Calibrate single and multi-curve frameworks using the [Solver](../api/solver#solver) with Levenberg-Marquardt, Gauss-Newton, and gradient descent algorithms.
+
+## Single-Curve Calibration
+
+Calibrate a single USD SOFR [DiscountCurve](../api/curves#discountcurve) using the default Levenberg-Marquardt algorithm. Define curve nodes at instrument maturity dates with initial discount factors of 1.0, then let the solver find the correct values.
+
+```python
+import datetime
+from vade import DiscountCurve, IRS, Solver
+
+effective = datetime.date(2025, 6, 16)
+
+nodes = {
+    effective: 1.0,
+    datetime.date(2026, 6, 16): 1.0,
+    datetime.date(2027, 6, 16): 1.0,
+    datetime.date(2028, 6, 16): 1.0,
+    datetime.date(2030, 6, 16): 1.0,
+    datetime.date(2035, 6, 16): 1.0,
+}
+curve = DiscountCurve(
+    nodes, interpolation="log_linear", convention="act360", id="sofr"
+)
+
+irs_1y = IRS(effective=effective, termination="1Y", frequency="a", fixed_rate=4.00, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=effective, termination="3Y", frequency="a", fixed_rate=3.75, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=effective, termination="5Y", frequency="a", fixed_rate=3.70, convention="act360", float_convention="act360")
+irs_10y = IRS(effective=effective, termination="10Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+
+instruments = [
+    (irs_1y, 4.00),
+    (irs_2y, 3.85),
+    (irs_3y, 3.75),
+    (irs_5y, 3.70),
+    (irs_10y, 3.85),
+]
+
+solver = Solver(curves=[curve], instruments=instruments)
+result = solver.iterate()
+
+result.converged  # True
+result.iterations > 0  # True
+```
+
+## Solver Diagnostics
+
+Inspect calibration quality through the [SolverResult](../api/solver#solverresult) diagnostics. Residuals show per-instrument calibration error and the Jacobian reveals sensitivity structure.
+
+```python
+import datetime
+from vade import DiscountCurve, IRS, Solver
+
+effective = datetime.date(2025, 6, 16)
+nodes = {
+    effective: 1.0,
+    datetime.date(2026, 6, 16): 1.0,
+    datetime.date(2027, 6, 16): 1.0,
+    datetime.date(2028, 6, 16): 1.0,
+    datetime.date(2030, 6, 16): 1.0,
+    datetime.date(2035, 6, 16): 1.0,
+}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act360", id="sofr")
+
+irs_1y = IRS(effective=effective, termination="1Y", frequency="a", fixed_rate=4.00, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=effective, termination="3Y", frequency="a", fixed_rate=3.75, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=effective, termination="5Y", frequency="a", fixed_rate=3.70, convention="act360", float_convention="act360")
+irs_10y = IRS(effective=effective, termination="10Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+
+solver = Solver(
+    curves=[curve],
+    instruments=[(irs_1y, 4.00), (irs_2y, 3.85), (irs_3y, 3.75), (irs_5y, 3.70), (irs_10y, 3.85)],
+)
+result = solver.iterate()
+
+result.objective < 1e-10  # True
+max(abs(r) for r in result.residuals) < 1e-8  # True
+result.jacobian.shape  # (5, 5)
+result.condition_number > 0  # True
+
+calibrated = solver.get_curve(0)
+float(calibrated.discount_factor(datetime.date(2026, 6, 16))) < 1.0  # True
+float(calibrated.discount_factor(datetime.date(2035, 6, 16))) > 0.5  # True
+float(calibrated.zero_rate(effective, datetime.date(2026, 6, 16))) > 0.03  # True
+```
+
+## Multi-Curve Calibration
+
+Separate OIS discounting from forward projection using `pre_solvers`. The inner solver calibrates the OIS discount curve, and the outer solver calibrates the forward curve while using the pre-calibrated discount curve for present-value calculations.
+
+```python
+import datetime
+from vade import DiscountCurve, IRS, Solver
+
+effective = datetime.date(2025, 6, 16)
+
+# Stage 1: OIS discount curve (slightly lower rates than Term SOFR)
+disc_nodes = {
+    effective: 1.0,
+    datetime.date(2026, 6, 16): 1.0,
+    datetime.date(2027, 6, 16): 1.0,
+    datetime.date(2028, 6, 16): 1.0,
+}
+disc_curve = DiscountCurve(
+    disc_nodes, interpolation="log_linear", convention="act360", id="ois_disc"
+)
+
+ois_1y = IRS(effective=effective, termination="1Y", frequency="a", fixed_rate=3.90, convention="act360", float_convention="act360")
+ois_2y = IRS(effective=effective, termination="2Y", frequency="a", fixed_rate=3.75, convention="act360", float_convention="act360")
+ois_3y = IRS(effective=effective, termination="3Y", frequency="a", fixed_rate=3.65, convention="act360", float_convention="act360")
+
+inner_solver = Solver(
+    curves=[disc_curve],
+    instruments=[(ois_1y, 3.90), (ois_2y, 3.75), (ois_3y, 3.65)],
+)
+
+# Stage 2: Forward projection curve
+fwd_nodes = {
+    effective: 1.0,
+    datetime.date(2026, 6, 16): 1.0,
+    datetime.date(2027, 6, 16): 1.0,
+    datetime.date(2028, 6, 16): 1.0,
+}
+fwd_curve = DiscountCurve(
+    fwd_nodes, interpolation="log_linear", convention="act360", id="sofr_fwd"
+)
+
+fwd_1y = IRS(effective=effective, termination="1Y", frequency="a", fixed_rate=4.00, convention="act360", float_convention="act360")
+fwd_2y = IRS(effective=effective, termination="2Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+fwd_3y = IRS(effective=effective, termination="3Y", frequency="a", fixed_rate=3.75, convention="act360", float_convention="act360")
+
+outer_solver = Solver(
+    curves=[fwd_curve],
+    instruments=[(fwd_1y, 4.00), (fwd_2y, 3.85), (fwd_3y, 3.75)],
+    pre_solvers=[inner_solver],
+)
+mc_result = outer_solver.iterate()
+mc_result.converged  # True
+mc_result.iterations > 0  # True
+```
+
+The dict [instrument format](../api/solver#instruments-format) gives explicit control over which curves are used for discounting and forecasting. Use `disc_curve_idx` and `forecast_curve_idx` to map each instrument to the correct curve when a single solver holds multiple curves.
+
+```python
+import datetime
+from vade import DiscountCurve, IRS, Solver
+
+effective = datetime.date(2025, 6, 16)
+
+disc_curve = DiscountCurve(
+    {effective: 1.0, datetime.date(2026, 6, 16): 1.0, datetime.date(2027, 6, 16): 1.0},
+    interpolation="log_linear", convention="act360", id="disc",
+)
+fwd_curve = DiscountCurve(
+    {effective: 1.0, datetime.date(2026, 6, 16): 1.0, datetime.date(2027, 6, 16): 1.0},
+    interpolation="log_linear", convention="act360", id="fwd",
+)
+
+irs_1y = IRS(effective=effective, termination="1Y", frequency="a", fixed_rate=4.00, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+
+instruments = [
+    {"instrument": irs_1y, "target": 4.00, "disc_curve_idx": 0, "forecast_curve_idx": 1, "label": "1Y_IRS", "currency": "USD"},
+    {"instrument": irs_2y, "target": 3.85, "disc_curve_idx": 0, "forecast_curve_idx": 1, "label": "2Y_IRS", "currency": "USD"},
+]
+
+solver = Solver(curves=[disc_curve, fwd_curve], instruments=instruments)
+result = solver.iterate()
+result.converged  # True
+```
+
+## Algorithm Comparison
+
+Compare Levenberg-Marquardt, Gauss-Newton, and gradient descent on the same single-curve calibration problem. Each algorithm needs a fresh curve since the solver mutates node values in place.
+
+```python
+import datetime
+from vade import DiscountCurve, IRS, Solver
+
+effective = datetime.date(2025, 6, 16)
+
+irs_1y = IRS(effective=effective, termination="1Y", frequency="a", fixed_rate=4.00, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=effective, termination="3Y", frequency="a", fixed_rate=3.75, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=effective, termination="5Y", frequency="a", fixed_rate=3.70, convention="act360", float_convention="act360")
+irs_10y = IRS(effective=effective, termination="10Y", frequency="a", fixed_rate=3.85, convention="act360", float_convention="act360")
+
+instruments = [
+    (irs_1y, 4.00),
+    (irs_2y, 3.85),
+    (irs_3y, 3.75),
+    (irs_5y, 3.70),
+    (irs_10y, 3.85),
+]
+
+def make_curve():
+    return DiscountCurve(
+        {
+            effective: 1.0,
+            datetime.date(2026, 6, 16): 1.0,
+            datetime.date(2027, 6, 16): 1.0,
+            datetime.date(2028, 6, 16): 1.0,
+            datetime.date(2030, 6, 16): 1.0,
+            datetime.date(2035, 6, 16): 1.0,
+        },
+        interpolation="log_linear",
+        convention="act360",
+        id="sofr",
+    )
+
+# Levenberg-Marquardt (default)
+solver_lm = Solver(curves=[make_curve()], instruments=instruments)
+result_lm = solver_lm.iterate()
+result_lm.converged  # True
+result_lm.algorithm  # 'levenberg_marquardt'
+
+# Gauss-Newton
+solver_gn = Solver(curves=[make_curve()], instruments=instruments, algorithm="gauss_newton")
+result_gn = solver_gn.iterate()
+result_gn.converged  # True
+result_gn.algorithm  # 'gauss_newton'
+
+# Gradient Descent
+solver_gd = Solver(curves=[make_curve()], instruments=instruments, algorithm="gradient_descent")
+result_gd = solver_gd.iterate()
+result_gd.converged  # True
+result_gd.algorithm  # 'gradient_descent'
+
+result_gd.iterations >= result_lm.iterations  # True
+```
+
+## Next Steps
+
+- [Risk](rates/risk) -- compute delta, gamma, and bucket-level sensitivities from calibrated curves
+- [Quick Start](quick-start) -- see the full pipeline in one workflow

@@ -1,0 +1,300 @@
+---
+title: "Bonds"
+description: "Compute settlement-aware analytics for a [FixedRateBond](../../api/instruments.md#fixedratebond)"
+---
+
+Compute settlement-aware analytics for a [FixedRateBond](../../api/instruments#fixedratebond)
+including clean and dirty prices, yield to maturity, duration, convexity, and
+spread measures. A single bond instrument is threaded through all sections.
+
+---
+
+## Setup
+
+Create a 10-year semi-annual coupon bond and calibrate a discount curve from
+Treasury-like market data. The bond uses the
+[actactisda](../../conventions#day-count-conventions) day count convention,
+standard for government bonds.
+
+```python
+import datetime
+from vade import FixedRateBond, DiscountCurve, Deposit, IRS, Solver
+
+effective = datetime.date(2025, 1, 15)
+settlement = datetime.date(2025, 6, 16)
+
+bond = FixedRateBond(
+    effective=effective,
+    termination="10y",
+    coupon=0.05,
+    frequency="s",
+    settlement_days=1,
+    convention="actactisda",
+    face_value=100.0,
+)
+
+curve = DiscountCurve(
+    {
+        settlement: 1.0,
+        datetime.date(2025, 9, 16): 1.0,
+        datetime.date(2026, 6, 16): 1.0,
+        datetime.date(2027, 6, 16): 1.0,
+        datetime.date(2028, 6, 16): 1.0,
+        datetime.date(2030, 6, 16): 1.0,
+        datetime.date(2032, 6, 16): 1.0,
+        datetime.date(2035, 1, 15): 1.0,
+    },
+    interpolation="log_linear",
+    convention="act360",
+    id="tsy",
+)
+
+dep = Deposit(effective=settlement, termination="3m", rate=0.0, convention="act360")
+irs_1y = IRS(effective=settlement, termination="1y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=settlement, termination="2y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=settlement, termination="3y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=settlement, termination="5y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_7y = IRS(effective=settlement, termination="7y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_10y = IRS(effective=settlement, termination="10y", frequency="s", fixed_rate=0.0, convention="act360", float_convention="act360")
+
+instruments = [
+    (dep, 0.0440),
+    (irs_1y, 4.20),
+    (irs_2y, 4.10),
+    (irs_3y, 4.00),
+    (irs_5y, 3.90),
+    (irs_7y, 3.95),
+    (irs_10y, 4.05),
+]
+
+solver = Solver(curves=[curve], instruments=instruments)
+result = solver.iterate()
+assert result.converged
+
+calibrated = solver.get_curve(0)
+```
+
+## Clean and Dirty Price
+
+The clean price excludes accrued interest and is the standard market quotation.
+The dirty price (also called full price) is what the buyer actually pays: clean
+price plus accrued interest from the last coupon date to settlement.
+
+```python continuation
+clean = float(bond.price(calibrated, settlement=settlement))
+dirty = float(bond.dirty_price(calibrated, settlement=settlement))
+accrued = float(bond.accrued_interest(settlement))
+
+clean    # 105.84104013229583
+dirty    # 107.94048764610798
+accrued  # 2.0994475138121547
+
+abs(dirty - (clean + accrued)) < 1e-10  # True
+```
+
+## Yield to Maturity
+
+Yield to maturity (YTM) is the single discount rate that equates the bond's
+future cashflows to its current price. The `ytm` method solves for yield from
+a clean price, and `price_from_ytm` inverts back to the dirty price for
+round-trip verification.
+
+```python continuation
+ytm = float(bond.ytm(clean_price=clean, settlement=settlement))
+ytm  # 0.04250919245943899
+
+dirty_from_ytm = float(bond.price_from_ytm(ytm, settlement=settlement))
+dirty_from_ytm  # 107.94048764610811
+
+abs(dirty_from_ytm - dirty) < 1e-6  # True
+```
+
+## Duration and Convexity
+
+Modified duration measures the bond's price sensitivity to a parallel shift in
+yields -- a modified duration of 7.5 means a 1% rate rise causes roughly a 7.5%
+price decline. Macaulay duration is the weighted-average time to receive
+cashflows. Convexity captures the curvature of the price-yield relationship, and
+DV01 is the dollar value of a one basis point rate move.
+
+```python continuation
+float(bond.duration(calibrated, metric="modified", settlement=settlement))  # 7.47939995668882
+float(bond.duration(calibrated, metric="macaulay", settlement=settlement))  # 7.638371582808822
+float(bond.convexity(calibrated, settlement=settlement))                    # 68.48920229165095
+float(bond.dv01(calibrated))                                                # 0.08547801519775078
+```
+
+## Z-Spread and Asset Swap Spread
+
+The Z-spread is the constant spread added to every point on the discount curve
+that reprices the bond to its market price -- a Z-spread near zero means the
+bond is fairly valued against the curve. The asset swap spread (ASW) measures
+the bond's spread over the floating rate in a par-par asset swap package.
+
+```python continuation
+z_spread = float(bond.z_spread(calibrated, price=clean, settlement=settlement))
+z_spread  # 7.716154286450026e-18
+
+asw = float(bond.asw_spread(calibrated, price=clean, method="par_par", settlement=settlement))
+asw  # 0.0025332873590058385
+```
+
+## Zero-Coupon Bonds
+
+Zero-coupon bonds pay no coupons and are issued at a discount to face value. The
+return comes entirely from the price appreciation to par at maturity. Accrued
+interest uses the OID (original issue discount) constant-yield method, where the
+bond accretes toward face value over its life.
+
+See [ZeroCouponBond](../../api/instruments#zerocouponbond) API reference.
+
+```python continuation
+zcb = ZeroCouponBond(
+    effective=effective,
+    termination="5y",
+    issue_price=90.0,
+    convention="actactisda",
+    face_value=100.0,
+)
+
+zcb_price = float(zcb.price(calibrated, settlement=settlement))
+zcb_dirty = float(zcb.dirty_price(calibrated, settlement=settlement))
+zcb_ytm = float(zcb.ytm(zcb_price, settlement))
+zcb_dur = float(zcb.duration(calibrated, metric="modified", settlement=settlement))
+
+assert 0 < zcb_price < 200
+assert zcb_dirty > 0
+assert 0 < zcb_ytm < 0.20
+assert zcb_dur > 0
+```
+
+## Step-Up Bonds
+
+Step-up bonds have coupon rates that change over the bond's life according to a
+predetermined schedule. They are common in corporate bonds and agency securities
+where the issuer agrees to pay higher coupons in later years.
+
+See [StepUpBond](../../api/instruments#stepupbond) API reference.
+
+```python continuation
+step = StepUpBond(
+    effective=effective,
+    termination="4y",
+    coupon_rates=[
+        (effective, 0.03),
+        (datetime.date(2027, 6, 16), 0.045),
+    ],
+    frequency="a",
+    face_value=100.0,
+)
+
+step_price = float(step.price(calibrated, settlement=settlement))
+step_accrued = float(step.accrued_interest(settlement))
+step_ytm = float(step.ytm(step_price, settlement))
+step_dur = float(step.duration(calibrated, metric="modified", settlement=settlement))
+
+assert 0 < step_price < 200
+assert step_accrued >= 0
+assert 0 < step_ytm < 0.20
+assert step_dur > 0
+```
+
+## Amortizing Bonds
+
+Amortizing bonds repay principal in installments rather than in a single bullet
+at maturity. This reduces the outstanding notional over time, lowering both
+duration and credit exposure. The amortization schedule specifies repayment
+amounts at specific coupon dates.
+
+See [AmortizingBond](../../api/instruments#amortizingbond) API reference.
+
+```python continuation
+amort = AmortizingBond(
+    effective=effective,
+    termination="3y",
+    coupon=0.04,
+    amortization_schedule=[
+        (datetime.date(2026, 1, 15), 30.0),
+        (datetime.date(2027, 1, 15), 30.0),
+    ],
+    frequency="a",
+    face_value=100.0,
+    convention="actactisda",
+)
+
+amort_price = float(amort.price(calibrated, settlement=settlement))
+amort_dur = float(amort.duration(calibrated, metric="modified", settlement=settlement))
+
+assert 0 < amort_price < 200
+assert amort_dur > 0
+
+# Cashflows show both coupon and principal repayment rows
+cfs = amort.cashflows(calibrated)
+period_types = cfs["Type"].to_list()
+assert "Amortizing" in period_types
+```
+
+## PIK Bonds
+
+Payment-in-kind (PIK) bonds capitalize accrued interest into the outstanding
+notional instead of paying cash coupons. The notional grows over time as
+interest compounds. A `pik_fraction` of 1.0 means full PIK (no cash coupons);
+values between 0 and 1 create partial PIK bonds that pay some cash and
+capitalize the rest.
+
+See [PIKBond](../../api/instruments#pikbond) API reference.
+
+```python continuation
+pik = PIKBond(
+    effective=effective,
+    termination="3y",
+    coupon=0.06,
+    pik_fraction=1.0,
+    frequency="a",
+    face_value=100.0,
+    convention="actactisda",
+)
+
+# Notional schedule shows how notional grows each period
+schedule = pik.notional_schedule()
+assert len(schedule) >= 3
+assert schedule[0][1] == 100.0       # starts at face value
+assert schedule[1][1] > 100.0        # grows after first period
+assert schedule[-1][1] > schedule[0][1]  # keeps growing
+
+pik_ytm = float(pik.ytm(100.0, effective))
+assert 0 < pik_ytm < 0.20
+```
+
+## Capped and Floored Floating-Rate Notes
+
+A capped floating-rate note limits the maximum coupon rate via an embedded cap
+option, while a floor sets a minimum. When both are present the structure is
+called a collar. Cap and floor options are priced using Black-76, so a
+volatility parameter (`vol`) is always required.
+
+See [CappedFloatRateNote](../../api/instruments#cappedfloatratenote) API reference.
+
+```python continuation
+capped = CappedFloatRateNote(
+    effective=effective,
+    termination="2y",
+    spread=0.005,
+    frequency="q",
+    cap_rate=0.06,
+    floor_rate=0.01,
+    vol=0.20,
+    convention="act360",
+)
+
+capped_dp = float(capped.dirty_price(curves=[calibrated, calibrated]))
+assert 80.0 < capped_dp < 120.0
+```
+
+## Next Steps
+
+- [Spread Analytics](spread-analytics) -- I-spread and asset swap analysis
+- [Callable Bonds](callable-bonds) -- Callable bond pricing with OAS
+- [Fitted Curves](fitted-curves) -- Parametric curve fitting to bond portfolios
+- [Credit Curves & CDS](credit-curves-cds) -- Credit curve bootstrapping and CDS pricing
+- [Serialization](../serialization) -- Save and restore curves via JSON

@@ -1,0 +1,11 @@
+{
+  "title": "Rates",
+  "pages": [
+    "index",
+    "curve-building",
+    "bootstrap-parametric",
+    "pricing",
+    "risk",
+    "capfloor"
+  ]
+}

@@ -1,0 +1,275 @@
+---
+title: "Architecture"
+description: "Vade is a Rust-core Python library for interest rate analytics. All numerical"
+---
+
+Vade is a Rust-core Python library for interest rate analytics. All numerical
+computation -- curve interpolation, AD propagation, solver calibration, cashflow
+generation -- happens in compiled Rust code. Python provides a thin ergonomic
+layer of type stubs and re-exports so that the library feels native to Python
+users while delivering compiled-code performance.
+
+## The Max-Rust Philosophy
+
+Vade follows a "max-Rust" architecture: **every computation happens in Rust**.
+The Python layer contains no business logic at all -- it consists entirely of
+type stub files (`.pyi`) for IDE support and `__init__.py` modules that
+re-export Rust objects.
+
+This design has three consequences:
+
+1. **Performance.** Curve interpolation, root-finding, AD propagation, and
+   solver iterations are compiled native code with no Python interpreter
+   overhead in the inner loops.
+
+2. **Correctness.** Rust's type system catches entire categories of bugs
+   (null references, data races, type mismatches) at compile time. The
+   numerical core cannot segfault or produce undefined behavior.
+
+3. **AD propagation.** The `Dual` and `Dual2` automatic differentiation
+   types are Rust structs. Every arithmetic operation on them -- including
+   interpolation, log/exp, and spline evaluation -- propagates derivative
+   information through compiled code, making AD nearly free compared to
+   tape-based Python AD frameworks.
+
+## Layer Stack
+
+Vade has three layers. Every user request passes through all three:
+
+```text
++--------------------------------------------+
+|            Python API Layer                 |
+|                                             |
+|  python/vade/                               |
+|    __init__.py          re-exports          |
+|    autodiff/__init__.pyi  type stubs        |
+|    curves/__init__.pyi    type stubs        |
+|    ...                                      |
++--------------------------------------------+
+|            PyO3 Binding Layer               |
+|                                             |
+|  rust/*/py.rs                               |
+|    #[pyclass] wrappers                      |
+|    #[pymethods] implementations             |
+|    Python dict -> Rust HashMap conversion   |
+|    str -> enum parsing                      |
++--------------------------------------------+
+|            Rust Core                        |
+|                                             |
+|  rust/*/mod.rs                              |
+|    Pure Rust types and algorithms           |
+|    No Python dependency                     |
+|    All business logic lives here            |
++--------------------------------------------+
+```
+
+**Python API layer** (`python/vade/`). Contains `.pyi` stub files that give
+IDEs full type information (autocomplete, hover docs, type checking) and
+`__init__.py` files that re-export compiled classes. There is no `.py` file
+with business logic anywhere in the codebase.
+
+**PyO3 binding layer** (`rust/*/py.rs`). Each Rust module has a `py.rs` file
+that defines `#[pyclass]` wrappers and `#[pymethods]` implementations. This
+layer handles the impedance mismatch between Python and Rust: converting
+Python dicts to Rust `HashMap`s, parsing string arguments into enum variants,
+and wrapping Rust return values in Python-compatible objects.
+
+**Rust core** (`rust/*/mod.rs`). Pure Rust implementations of all algorithms.
+These files have no PyO3 dependency and can be tested independently of Python.
+All interpolation, AD arithmetic, schedule generation, solver logic, and
+cashflow computation lives here.
+
+## Module Organization
+
+The Rust codebase is organized into eight modules, each following the same
+`mod.rs` + `py.rs` pattern:
+
+| Module         | Description                                                        |
+| -------------- | ------------------------------------------------------------------ |
+| `autodiff`     | Forward-mode AD types (`Dual`, `Dual2`) and arithmetic operations  |
+| `calendar`     | Business day calendars, schedule generation, day count fractions    |
+| `cashflows`    | Fixed and floating leg generation, period-level cashflow detail     |
+| `curves`       | Discount curves, line curves, composite curves, interpolation      |
+| `fx`           | FX spot rates, cross-rate triangulation, FX forwards               |
+| `instruments`  | IRS, FRA, ZCS, OIS, bonds, CDS, XCS, deposits, cap/floor          |
+| `numerical`    | Root-finding solvers (Brent, Newton-Raphson)                       |
+| `solver`       | Multi-curve Jacobian-based calibration, bootstrap                  |
+
+Each module registers its Python-visible classes through a `register_module`
+function called from the top-level `lib.rs`:
+
+```text
+lib.rs
+  -> autodiff::register_module    (Dual, Dual2)
+  -> calendar::register_module    (BusinessCalendar, Schedule, dcf, ...)
+  -> curves::py::register_module  (DiscountCurve, LineCurve, ...)
+  -> cashflows::py::register_module
+  -> instruments::py::register_module
+  -> solver::py::register_module
+  -> fx::py::register_module
+  -> numerical::py::register_module
+```
+
+## Data Flow
+
+A typical operation -- building a discount curve and querying it -- passes
+through all three layers:
+
+```text
+Python:
+  curve = DiscountCurve(
+      {date(2024,1,1): 1.0, date(2025,1,1): 0.96},
+      interpolation="log_linear",
+  )
+                |
+                v
+PyO3 py.rs:
+  Parse Python dict -> BTreeMap<NaiveDate, Number>
+  Parse "log_linear" -> InterpolationMethod::LogLinear
+  Construct RateCurve with interpolation engine
+  Wrap in #[pyclass] PyDiscountCurve
+                |
+                v
+Python:
+  curve.discount_factor(date(2024, 7, 1))
+                |
+                v
+PyO3 py.rs:
+  Convert Python date -> NaiveDate
+  Call RateCurve::discount_factor(NaiveDate)
+                |
+                v
+Rust mod.rs:
+  index_left binary search for date position
+  Log-linear interpolation on node DFs
+  Return Number (float, Dual, or Dual2)
+                |
+                v
+PyO3 py.rs:
+  Convert Number -> Python float / Dual / Dual2
+                |
+                v
+Python:
+  df = 0.9802...  (or Dual with gradient if AD nodes)
+```
+
+The same pattern applies to every operation: instrument pricing, solver
+calibration, risk computation. Python never performs arithmetic -- it is
+always delegated to Rust.
+
+## Build System
+
+Vade uses [maturin](https://github.com/PyO3/maturin) as its build backend.
+Maturin compiles the Rust source into a native extension module (`_vade_rs`)
+that Python imports as a regular package.
+
+**Build for development:**
+
+```bash
+maturin develop --release
+```
+
+This compiles the Rust code with optimizations and installs the resulting
+shared library (`.so` on Linux, `.dylib` on macOS, `.pyd` on Windows)
+into your Python environment.
+
+**Key configuration files:**
+
+| File            | Purpose                                             |
+| --------------- | --------------------------------------------------- |
+| `Cargo.toml`    | Rust package definition, dependencies, features     |
+| `pyproject.toml`| Python package metadata, maturin settings           |
+| `rust/lib.rs`   | PyO3 module entry point, submodule registration     |
+
+**Output structure:**
+
+```text
+vade/
+  _vade_rs.so          <-- compiled Rust extension
+  _vade_rs.pyi         <-- top-level type stubs (if present)
+  __init__.py          <-- re-exports from _vade_rs submodules
+  autodiff/
+    __init__.py        <-- re-exports Dual, Dual2
+    __init__.pyi       <-- type stubs for IDE support
+  curves/
+    __init__.py        <-- re-exports DiscountCurve, LineCurve, ...
+    __init__.pyi       <-- type stubs
+  ...
+```
+
+Type stubs (`.pyi` files) are essential because PyO3-compiled objects lack
+runtime docstrings and type annotations. The stubs provide full IDE support:
+autocomplete, parameter hints, return type information, and hover docs.
+
+## Performance
+
+Rust core provides significant speedup over pure Python for curve calibration
+and pricing. Compiled native code eliminates interpreter overhead for the
+tight numerical loops in interpolation, root-finding, and AD propagation.
+
+**Why Rust is fast for this domain:**
+
+- **No GIL contention.** Numerical computation runs in compiled Rust code,
+  not through the Python interpreter. The Global Interpreter Lock does not
+  bottleneck pure-Rust calculations.
+
+- **Compiled arithmetic.** Every `Dual * Dual` operation is a compiled
+  function call, not a Python `__mul__` dispatch through the interpreter.
+  This matters enormously for solver iterations that perform millions of
+  AD-tracked multiplications.
+
+- **Cache-friendly data layout.** Rust `Vec<f64>` is a contiguous array in
+  memory, identical to a C array. Gradient and Hessian storage benefits from
+  CPU cache locality.
+
+- **Zero-copy where possible.** PyO3 can share memory between Python
+  `numpy` arrays and Rust `ndarray` slices without copying data for
+  gradient and Hessian extraction.
+
+Exact speedup depends on hardware and workload complexity. Curve calibration
+with a 9-instrument solver typically completes in under 1ms on modern
+hardware.
+
+## Type System Overview
+
+Vade's automatic differentiation system produces a distinctive type pattern:
+methods like `discount_factor()`, `zero_rate()`, and `forward_rate()` return
+`Union[float, Dual, Dual2]` rather than a plain `float`. The return type
+depends on the types of the curve's node values:
+
+- Float nodes produce float outputs (no derivative tracking)
+- `Dual` nodes produce `Dual` outputs (first-order derivatives)
+- `Dual2` nodes produce `Dual2` outputs (first and second-order derivatives)
+
+This is a direct consequence of the Rust AD implementation flowing through
+PyO3 -- the same compiled code path handles all three numeric types via
+Rust's `Number` enum.
+
+See [Type System](type-system) for a full explanation of automatic
+differentiation, dual numbers, and how to work with union return types.
+
+## Dependencies
+
+### Rust Dependencies
+
+| Crate         | Version | Purpose                                         |
+| ------------- | ------- | ----------------------------------------------- |
+| `pyo3`        | 0.28.2  | Python-Rust bindings (PyO3)                     |
+| `ndarray`     | 0.17    | N-dimensional arrays for gradient/Hessian       |
+| `chrono`      | 0.4     | Date handling (`NaiveDate`)                     |
+| `indexmap`    | 2.7     | Insertion-ordered maps for node storage         |
+| `numpy`       | 0.28    | NumPy array interop via PyO3                    |
+| `num-traits`  | 0.2     | Generic numeric traits                          |
+| `auto_ops`    | 0.3     | Operator overloading macro support              |
+| `itertools`   | 0.14    | Iterator combinators                            |
+| `statrs`      | 0.18    | Statistical distributions (for Black-Scholes)   |
+| `serde`       | 1.0     | Serialization framework                         |
+| `serde_json`  | 1.0     | JSON serialization                              |
+
+### Python Dependencies
+
+| Package  | Version   | Purpose                          |
+| -------- | --------- | -------------------------------- |
+| `numpy`  | >= 1.21   | Array types for gradient access  |
+| `pandas` | >= 1.4    | DataFrame for cashflow tables    |
+| `polars` | >= 0.20   | DataFrame for risk reports       |

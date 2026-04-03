@@ -1,0 +1,215 @@
+---
+title: "Quick Start"
+description: "Build a USD SOFR discount curve, calibrate it to market instruments, price swaps, and compute risk -- all in one workflow. This guide uses [DiscountCurve](../api/curves.md#discountcurve) for curve construction and [Solver](../api/solver.md#solver) for calibration."
+---
+
+Build a USD SOFR discount curve, calibrate it to market instruments, price swaps, and compute risk -- all in one workflow. This guide uses [DiscountCurve](../api/curves#discountcurve) for curve construction and [Solver](../api/solver#solver) for calibration.
+
+---
+
+## Market Data
+
+We start with a set of USD SOFR market quotes observed on 16 June 2025. The dataset spans FRAs and interest rate swaps out to 10 years, with rates in the 3.7--4.3% range reflecting a post-hiking-cycle environment. All instruments use the [act360](../conventions#day-count-conventions) day count convention.
+
+```python
+import datetime
+from vade import DiscountCurve, IRS, FRA, Solver
+
+effective = datetime.date(2025, 6, 16)
+
+# Curve nodes: one per instrument maturity plus an anchor at the effective date.
+# Initial discount factors are 1.0 everywhere -- the Solver will calibrate them.
+nodes = {
+    effective: 1.0,
+    datetime.date(2025, 9, 16): 1.0,   # 3M
+    datetime.date(2025, 12, 16): 1.0,  # 6M
+    datetime.date(2026, 6, 16): 1.0,   # 1Y
+    datetime.date(2027, 6, 16): 1.0,   # 2Y
+    datetime.date(2028, 6, 16): 1.0,   # 3Y
+    datetime.date(2030, 6, 16): 1.0,   # 5Y
+    datetime.date(2032, 6, 16): 1.0,   # 7Y
+    datetime.date(2035, 6, 16): 1.0,   # 10Y
+}
+```
+
+## Build the Curve
+
+Create a DiscountCurve with [log-linear](../conventions#interpolation-methods) interpolation. This is the standard choice for discount factor curves because it preserves positivity and produces smooth forward rates.
+
+```python continuation
+curve = DiscountCurve(
+    nodes,
+    interpolation="log_linear",
+    convention="act360",
+    id="sofr",
+)
+```
+
+## Define Instruments
+
+Create FRA and IRS instruments matching the market quotes. Each IRS `fixed_rate` is in percentage form (4.0 means 4.0%). We use the 5-tuple format `(instrument, target_rate, curve_index, label, currency)` so that the Solver can produce labeled risk output later. Note that IRS targets are in percentage form (matching `IRS.rate()`) while FRA targets are in decimal form (matching `FRA.rate()`).
+
+```python continuation
+fra_3m = FRA(
+    effective=effective,
+    termination="3M",
+    fixed_rate=4.25,
+    convention="act360",
+)
+fra_6m = FRA(
+    effective=effective,
+    termination="6M",
+    fixed_rate=4.15,
+    convention="act360",
+)
+
+irs_1y = IRS(
+    effective=effective,
+    termination="1Y",
+    frequency="a",
+    fixed_rate=4.00,
+    convention="act360",
+    float_convention="act360",
+)
+irs_2y = IRS(
+    effective=effective,
+    termination="2Y",
+    frequency="a",
+    fixed_rate=3.85,
+    convention="act360",
+    float_convention="act360",
+)
+irs_3y = IRS(
+    effective=effective,
+    termination="3Y",
+    frequency="a",
+    fixed_rate=3.75,
+    convention="act360",
+    float_convention="act360",
+)
+irs_5y = IRS(
+    effective=effective,
+    termination="5Y",
+    frequency="a",
+    fixed_rate=3.70,
+    convention="act360",
+    float_convention="act360",
+)
+irs_7y = IRS(
+    effective=effective,
+    termination="7Y",
+    frequency="a",
+    fixed_rate=3.75,
+    convention="act360",
+    float_convention="act360",
+)
+irs_10y = IRS(
+    effective=effective,
+    termination="10Y",
+    frequency="a",
+    fixed_rate=3.85,
+    convention="act360",
+    float_convention="act360",
+)
+
+# 5-tuple format: (instrument, target_rate, curve_index, label, currency)
+# FRA targets use decimal form (0.0425); IRS targets use percentage form (4.00)
+instruments = [
+    (fra_3m, 0.0425, 0, "3M_FRA", "USD"),
+    (fra_6m, 0.0415, 0, "6M_FRA", "USD"),
+    (irs_1y, 4.00, 0, "1Y_IRS", "USD"),
+    (irs_2y, 3.85, 0, "2Y_IRS", "USD"),
+    (irs_3y, 3.75, 0, "3Y_IRS", "USD"),
+    (irs_5y, 3.70, 0, "5Y_IRS", "USD"),
+    (irs_7y, 3.75, 0, "7Y_IRS", "USD"),
+    (irs_10y, 3.85, 0, "10Y_IRS", "USD"),
+]
+```
+
+## Calibrate
+
+Pass the curve and instruments to the Solver and calibrate. The Solver adjusts the discount factors at each node until every instrument reprices to its market quote.
+
+```python continuation
+solver = Solver(curves=[curve], instruments=instruments)
+result = solver.iterate()
+
+assert result.converged  # True
+```
+
+Query a few points on the calibrated curve to verify the discount factors and zero rates look reasonable.
+
+```python continuation
+calibrated = solver.get_curve(0)
+
+# Discount factors decrease with maturity
+df_1y = float(calibrated.discount_factor(datetime.date(2026, 6, 16)))
+assert 0.94 < df_1y < 0.98  # ~0.961
+
+# Zero rates in decimal form
+zr_1y = float(calibrated.zero_rate(effective, datetime.date(2026, 6, 16)))
+assert 0.03 < zr_1y < 0.05  # ~0.039
+
+# Forward rate between 1Y and 2Y
+fwd_1y_2y = float(calibrated.forward_rate(
+    datetime.date(2026, 6, 16), datetime.date(2027, 6, 16)
+))
+assert 0.03 < fwd_1y_2y < 0.05  # ~0.036
+```
+
+The calibrated curve now prices all input instruments back to their market quotes. You can verify this by checking that the [SolverResult](../api/solver#solverresult) residuals are near zero:
+
+```python continuation
+assert max(abs(r) for r in result.residuals) < 1e-8
+```
+
+## Price Instruments
+
+Price an off-market 5Y IRS at 3.80% (10bp above the market quote of 3.70%) against the calibrated curve.
+
+```python continuation
+test_irs = IRS(
+    effective=effective,
+    termination="5Y",
+    frequency="a",
+    fixed_rate=3.80,
+    convention="act360",
+    float_convention="act360",
+)
+
+# Par rate implied by the calibrated curve
+par_rate = float(test_irs.rate(calibrated))
+assert 3.5 < par_rate < 4.0  # ~3.70
+
+# NPV: non-zero because the fixed rate is off-market
+npv = float(test_irs.npv(calibrated))
+assert npv != 0.0  # off-market instrument has non-zero NPV
+
+# Cashflow schedule as a Polars DataFrame
+cf = test_irs.cashflows(calibrated)
+assert cf.shape[0] > 0  # at least one cashflow row
+assert cf.shape[1] > 0  # multiple columns
+```
+
+## Compute Risk
+
+Delta and gamma sensitivities show how the instrument's value changes with respect to each calibrating instrument. These are computed from the calibrated solver using [automatic differentiation](../getting-started/type-system) -- to understand why some methods return `Dual` instead of `float`, see the [Type System](../getting-started/type-system.md) guide.
+
+```python continuation
+delta_df = solver.delta(test_irs, result)
+assert delta_df.shape[0] == 8  # one row per calibrating instrument
+assert delta_df.columns == ["instrument_label", "tenor", "sensitivity", "currency"]
+```
+
+Gamma captures second-order (convexity) risk:
+
+```python continuation
+gamma_df = solver.gamma(test_irs, result)
+assert gamma_df.shape[0] == 8  # 8x8 matrix
+assert "label" in gamma_df.columns
+```
+
+## Next Steps
+
+- [Curve Building](rates/curve-building) -- explore different interpolation methods and curve types
+- [Calibration](calibration) -- multi-curve frameworks and solver algorithm comparison

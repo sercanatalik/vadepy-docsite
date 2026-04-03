@@ -1,0 +1,211 @@
+---
+title: "Market Context"
+description: "Market data container, fixing store, and evaluation date management for production pricing workflows."
+---
+
+Market data container, fixing store, and evaluation date management for production pricing workflows.
+
+All types are available via flat import:
+
+```bash
+from vade import MarketContext, FixingStore, eval_date
+```
+
+**Contents:**
+[FixingStore](#fixingstore) | [MarketContext](#marketcontext) | [eval_date](#eval_date)
+
+______________________________________________________________________
+
+## FixingStore
+
+In-memory store for historical fixing rates keyed by index name (e.g. "SOFR", "EURIBOR"). _Pure Python._
+
+### Constructor
+
+```bash
+FixingStore()
+```
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.set(index, fixings)` | `None` | Store or merge fixings for an index. `fixings` is `dict[date, float]` |
+| `.get(index)` | `dict[date, float] \| None` | Get all fixings for an index (returns a copy) |
+| `.get_rate(index, dt)` | `float \| None` | Get single fixing rate by index and date |
+| `.clear(index=None)` | `None` | Clear one index or all indices if `None` |
+| `.list_indices()` | `list[str]` | Sorted list of stored index names |
+| `.from_polars(df, index=None)` | `None` | Bulk-load from Polars DataFrame with columns `date`, `rate`, and optionally `index` |
+| `.from_csv(path, index=None)` | `None` | Bulk-load from CSV file (same column format as `from_polars`) |
+| `len(store)` | `int` | Total count of all fixings across all indices |
+
+### Example
+
+```python
+import datetime
+from vade import FixingStore
+
+store = FixingStore()
+store.set("SOFR", {
+    datetime.date(2024, 1, 2): 0.053,
+    datetime.date(2024, 1, 3): 0.0531,
+    datetime.date(2024, 1, 4): 0.0529,
+})
+
+rate = store.get_rate("SOFR", datetime.date(2024, 1, 2))
+assert rate == 0.053
+
+assert store.list_indices() == ["SOFR"]
+assert len(store) == 3
+
+# Merge additional fixings
+store.set("EURIBOR", {datetime.date(2024, 1, 2): 0.039})
+assert store.list_indices() == ["EURIBOR", "SOFR"]
+assert len(store) == 4
+```
+
+______________________________________________________________________
+
+## MarketContext
+
+Immutable container bundling all pricing inputs: evaluation date, named curves, historical fixings, FX rates, and calendars. _Pure Python._
+
+### Constructor
+
+```bash
+MarketContext(*, eval_date=None, curves=None, fixings=None, fx_rates=None, fx_pairs=None, calendars=None)
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `eval_date` | `datetime.date \| None` | `None` | Evaluation (pricing) date. Falls back to module-level `eval_date` context, then `date.today()` |
+| `curves` | `dict[str, Any] \| None` | `None` | Named curves keyed by string ID (e.g. `{"USD_SOFR": curve}`) |
+| `fixings` | `FixingStore \| None` | `None` | Historical fixing rates |
+| `fx_rates` | `FXRates \| None` | `None` | FX rate object for cross-currency pricing |
+| `fx_pairs` | `dict[str, float] \| None` | `None` | Raw FX pair dict for serialization (required if `fx_rates` provided) |
+| `calendars` | `dict[str, Any] \| None` | `None` | Named business day calendars |
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `.eval_date` | `datetime.date` | Read-only evaluation date |
+| `.curves` | `dict[str, Any]` | Read-only curves dict (empty dict if None) |
+| `.fixings` | `FixingStore` | Read-only fixing store (empty FixingStore if None) |
+| `.fx_rates` | `FXRates \| None` | Read-only FX rates object |
+| `.calendars` | `dict[str, Any]` | Read-only calendars dict (empty dict if None) |
+
+### Methods: Construction
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.from_solver(solver, *, eval_date=None, fixings=None, fx_rates=None, fx_pairs=None, calendars=None)` | `MarketContext` | Create context from calibrated Solver, extracting all curves by ID |
+
+### Methods: Copy-on-Modify
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.with_eval_date(eval_date)` | `MarketContext` | New context with different evaluation date |
+| `.with_curve(curve_id, curve)` | `MarketContext` | New context with added/replaced curve |
+| `.with_fixings(fixings)` | `MarketContext` | New context with replaced fixing store |
+| `.with_fx_rates(fx_rates, *, fx_pairs=None)` | `MarketContext` | New context with replaced FX rates |
+| `.with_calendar(name, calendar)` | `MarketContext` | New context with added/replaced calendar |
+
+### Methods: Lookup
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.curve(curve_id)` | `DiscountCurve \| ForwardCurve \| ...` | Retrieve curve by string ID (raises `KeyError` if not found) |
+
+### Methods: Analytics
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.discount_factor(curve_id, dt)` | `float \| Dual \| Dual2` | Discount factor from curve at date |
+| `.forward_rate(curve_id, start, end)` | `float \| Dual \| Dual2` | Forward rate from curve between dates |
+| `.zero_rate(curve_id, start, end)` | `float \| Dual \| Dual2` | Zero rate from curve between dates |
+| `.fx_rate(base, quote)` | `float` | FX spot rate for currency pair |
+
+### Methods: Comparison
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.diff(other, *, as_dataframe=False)` | `dict \| DataFrame` | Compare two contexts: shows added/removed/changed curves and fixings |
+
+### Methods: Serialization
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.to_json()` | `str` | Serialize full context to JSON string |
+| `.from_json(json_str)` (classmethod) | `MarketContext` | Restore context from JSON string with polymorphic curve handling |
+
+### Example
+
+```python
+import datetime
+from vade import MarketContext, FixingStore, DiscountCurve
+
+effective = datetime.date(2025, 6, 16)
+
+curve = DiscountCurve(
+    {
+        effective: 1.0,
+        datetime.date(2026, 6, 16): 0.9615,
+        datetime.date(2027, 6, 16): 0.9246,
+    },
+    interpolation="log_linear",
+    convention="act360",
+    id="usd_sofr",
+)
+
+store = FixingStore()
+store.set("SOFR", {datetime.date(2025, 6, 13): 0.043})
+
+ctx = MarketContext(
+    eval_date=effective,
+    curves={"usd_sofr": curve},
+    fixings=store,
+)
+
+# Lookup
+assert ctx.curve("usd_sofr") is curve
+
+# Analytics
+df = ctx.discount_factor("usd_sofr", datetime.date(2026, 6, 16))
+assert abs(df - 0.9615) < 0.001
+
+# Copy-on-modify (original unchanged)
+ctx2 = ctx.with_eval_date(datetime.date(2025, 7, 16))
+assert ctx.eval_date == effective
+assert ctx2.eval_date == datetime.date(2025, 7, 16)
+```
+
+______________________________________________________________________
+
+## eval_date
+
+Context manager for temporarily setting the module-level default evaluation date. _Pure Python._
+
+### Usage
+
+```bash
+from vade import eval_date
+
+with eval_date(datetime.date(2025, 6, 16)):
+    # All vade calls within this block use 2025-06-16 as default eval_date
+    ...
+```
+
+### Example
+
+```python
+import datetime
+from vade import eval_date
+
+d = datetime.date(2025, 6, 16)
+with eval_date(d):
+    pass  # eval_date context active
+# context restored after block exits
+```

@@ -1,0 +1,13 @@
+{
+  "title": "Guides",
+  "pages": [
+    "quick-start",
+    "market-context",
+    "serialization",
+    "calibration",
+    "rates",
+    "credit",
+    "fx",
+    "financing"
+  ]
+}

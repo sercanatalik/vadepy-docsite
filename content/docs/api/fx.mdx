@@ -1,0 +1,185 @@
+---
+title: "FX"
+description: "FX rates with graph-based cross-rate triangulation, currency conversion, and FX forward pricing."
+---
+
+FX rates with graph-based cross-rate triangulation, currency conversion, and FX forward pricing.
+
+All types are available via flat import:
+
+```bash
+from vade import FXPair, FXRates, FXForwards
+```
+
+______________________________________________________________________
+
+## FXPair
+
+Currency pair representation. _Rust-backed._
+
+### Constructor
+
+```bash
+FXPair(pair_str)
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `pair_str` | `str` | *required* | Six-character lowercase currency pair (e.g., `"eurusd"`) |
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `.lhs` | `str` | Left-hand (base) currency (e.g., `"eur"`) |
+| `.rhs` | `str` | Right-hand (quote) currency (e.g., `"usd"`) |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.invert()` | `FXPair` | Return pair with currencies swapped |
+
+### Example
+
+```python
+from vade import FXPair
+
+pair = FXPair("eurusd")
+pair.lhs  # 'eur'
+pair.rhs  # 'usd'
+
+inv = pair.invert()
+inv.lhs  # 'usd'
+inv.rhs  # 'eur'
+```
+
+______________________________________________________________________
+
+## FXRates
+
+FX rates with graph-based cross-rate triangulation and automatic AD variables. _Rust-backed._
+
+Builds a currency graph from input rates and triangulates any cross-rate not directly provided.
+
+### Constructor
+
+```bash
+FXRates(fx_rates, settlement)
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `fx_rates` | `Dict[str, float]` | *required* | Currency pair rates as `{"eurusd": 1.1, "gbpusd": 1.3}` |
+| `settlement` | `datetime.date` | *required* | Settlement date for spot rates |
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `.currencies` | `list[str]` | List of currencies in the rate system |
+| `.settlement` | `datetime.date` | Settlement date |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.rate(pair)` | `float \| Dual` | Rate for pair (triangulates if needed) |
+| `.convert(value, domestic, foreign)` | `float \| Dual` | Convert amount from domestic to foreign currency |
+| `.convert_positions(positions, base)` | `float \| Dual` | Convert position dict to base currency total |
+| `.restate(new_pairs)` | `FXRates` | Restate rates in terms of new pair definitions |
+
+FX methods may return [Dual](../getting-started/type-system#dual) values when curves have AD-enabled nodes.
+
+### Example
+
+```python
+import datetime
+from vade import FXRates
+
+fx = FXRates({"eurusd": 1.10, "gbpusd": 1.30}, datetime.date(2024, 1, 3))
+
+# Direct rate lookup
+eurusd = fx.rate("eurusd")
+assert 1.09 < float(eurusd) < 1.11
+
+# Cross-rate triangulation: EUR/GBP derived from EUR/USD and GBP/USD
+eurgbp = fx.rate("eurgbp")
+assert 0.8 < float(eurgbp) < 0.9  # ~1.10/1.30 = 0.846
+
+# Currency conversion
+usd_amount = fx.convert(1_000_000.0, "eur", "usd")
+assert float(usd_amount) > 1_000_000  # EUR to USD at 1.10
+
+fx.currencies  # ['eur', 'gbp', 'usd']
+fx.settlement  # datetime.date(2024, 1, 3)
+```
+
+______________________________________________________________________
+
+## FXForwards
+
+FX forwards via interest rate parity. _Rust-backed._
+
+Computes forward FX rates and forward points using spot rates and discount curves for each currency.
+
+### Constructor
+
+```bash
+FXForwards(fx_rates, settlements)
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `fx_rates` | `FXRates` | *required* | Spot FX rates |
+| `settlements` | `Dict[str, datetime.date]` | *required* | Settlement dates per currency code |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.rate(pair, delivery, curves)` | `float \| Dual` | Forward FX rate at delivery date. `curves` is `Dict[str, DiscountCurve]` mapping currency codes to [discount curves](curves#discountcurve). |
+| `.points(pair, delivery, curves)` | `float \| Dual` | Forward points (forward rate minus spot rate) |
+
+Return types are [Dual](autodiff#dual) when AD variables are tracked.
+
+### Example
+
+```python
+import datetime
+from vade import DiscountCurve, FXRates, FXForwards
+
+# Spot rates
+fx = FXRates({"eurusd": 1.10}, datetime.date(2024, 1, 3))
+
+# Discount curves per currency
+usd_nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.96,
+}
+eur_nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.97,
+}
+usd_curve = DiscountCurve(usd_nodes, convention="act365f", id="usd")
+eur_curve = DiscountCurve(eur_nodes, convention="act365f", id="eur")
+
+# FX forwards
+settlements = {"usd": datetime.date(2024, 1, 3), "eur": datetime.date(2024, 1, 3)}
+fwd = FXForwards(fx, settlements)
+
+curves = {"usd": usd_curve, "eur": eur_curve}
+delivery = datetime.date(2025, 1, 3)
+
+fwd_rate = fwd.rate("eurusd", delivery, curves)
+assert float(fwd_rate) > 1.0  # forward rate reflects interest rate differential
+
+fwd_pts = fwd.points("eurusd", delivery, curves)
+assert isinstance(float(fwd_pts), float)  # forward points (forward - spot)
+```

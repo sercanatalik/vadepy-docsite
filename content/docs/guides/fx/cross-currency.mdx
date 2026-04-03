@@ -1,0 +1,39 @@
+---
+title: "Cross-Currency Swaps"
+description: "A [CrossCurrencySwap](../../api/instruments.md#xcs) (XCS) exchanges floating rate"
+---
+
+A [CrossCurrencySwap](../../api/instruments#xcs) (XCS) exchanges floating rate
+payments in two currencies with notional exchanges at inception and maturity.
+It uses a 4-curve pricing model -- discount and forecast curves for each leg --
+plus spot FX rates for notional conversion.
+
+---
+
+## Cross-Currency Swap
+
+A [CrossCurrencySwap](../../api/instruments#xcs) (XCS) exchanges floating rate
+payments in two currencies with notional exchanges. It uses a 4-curve pricing
+model: discount and forecast curves for each leg, plus spot FX rates.
+
+```python
+xcs = XCS(
+    effective=effective,
+    termination="5y",
+    leg1_currency="eur",
+    leg2_currency="usd",
+    leg1_notional=1_000_000.0,
+    leg2_notional=1_080_000.0,
+    initial_fx_rate=1.08,
+    frequency="a",
+    convention="act360",
+)
+
+float(xcs.npv(eur_curve, eur_curve, usd_curve, usd_curve, fxr))   # 66059.25314189272
+float(xcs.rate(eur_curve, eur_curve, usd_curve, usd_curve, fxr))  # -145.8313845574968
+```
+
+## Next Steps
+
+- [FX Rates & Forwards](fx-rates-forwards) -- FX rate triangulation and forward construction
+- [Non-Deliverable Instruments](non-deliverable) -- NDF and non-deliverable swap pricing for restricted currencies

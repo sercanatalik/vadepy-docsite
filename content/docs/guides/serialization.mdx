@@ -1,0 +1,153 @@
+---
+title: "Serialization"
+description: "All major curve types and the [Solver](../api/solver.md#solver) support JSON"
+---
+
+All major curve types and the [Solver](../api/solver#solver) support JSON
+serialization via `to_json()` and `from_json()`. This enables persisting
+calibrated curves to disk, transmitting them over a network, or inspecting
+their structure for debugging. Links to
+[DiscountCurve](../api/curves#discountcurve) for the primary example.
+
+---
+
+## Discount Curve Round-Trip
+
+The serialization pattern is the same for all curve types: call `to_json()` to
+get a JSON string, and the corresponding static `from_json()` to restore the
+object. The restored curve produces identical query results.
+
+```python
+import datetime
+import json
+from vade import DiscountCurve, LineCurve, NelsonSiegel, Solver, Deposit, IRS
+
+effective = datetime.date(2025, 6, 16)
+
+curve = DiscountCurve(
+    {
+        effective: 1.0,
+        datetime.date(2025, 12, 16): 0.98,
+        datetime.date(2026, 6, 16): 0.96,
+        datetime.date(2027, 6, 16): 0.925,
+        datetime.date(2030, 6, 16): 0.87,
+    },
+    interpolation="log_linear",
+    convention="act360",
+)
+
+json_str = curve.to_json()
+isinstance(json_str, str)  # True
+
+restored = DiscountCurve.from_json(json_str)
+float(restored.discount_factor(datetime.date(2026, 6, 16)))  # 0.96
+assert float(restored.discount_factor(datetime.date(2026, 6, 16))) == float(
+    curve.discount_factor(datetime.date(2026, 6, 16))
+)
+```
+
+## LineCurve and Parametric Curves
+
+The same `to_json()` / `from_json()` pattern applies to
+[LineCurve](../api/curves#linecurve) and parametric curve types like
+[NelsonSiegel](../api/curves#nelsonsiegel). Each type's `from_json()` is a
+static method that returns the correct type.
+
+```python continuation
+line = LineCurve(
+    {
+        effective: 0.040,
+        datetime.date(2026, 6, 16): 0.039,
+        datetime.date(2027, 6, 16): 0.038,
+    },
+    interpolation="linear",
+    convention="act360",
+)
+
+line_restored = LineCurve.from_json(line.to_json())
+float(line_restored.discount_factor(datetime.date(2026, 6, 16)))  # 0.9612299019102728
+assert float(line_restored.discount_factor(datetime.date(2026, 6, 16))) == float(
+    line.discount_factor(datetime.date(2026, 6, 16))
+)
+
+ns = NelsonSiegel(
+    beta0=0.04, beta1=-0.02, beta2=0.03, tau=1.5,
+    base_date=effective, convention="act365f",
+)
+
+ns_restored = NelsonSiegel.from_json(ns.to_json())
+float(ns_restored.zero_rate(effective, datetime.date(2026, 6, 16)))  # 0.03189622964353336
+assert float(ns_restored.zero_rate(effective, datetime.date(2026, 6, 16))) == float(
+    ns.zero_rate(effective, datetime.date(2026, 6, 16))
+)
+```
+
+## Solver State
+
+Persisting a calibrated [Solver](../api/solver#solver) captures the full
+calibration state -- curves, instruments, and weights. This is useful for
+reproducibility: save after calibration, restore later without re-running the
+optimization.
+
+```python continuation
+cal_curve = DiscountCurve(
+    {
+        effective: 1.0,
+        datetime.date(2025, 12, 16): 1.0,
+        datetime.date(2026, 6, 16): 1.0,
+        datetime.date(2027, 6, 16): 1.0,
+    },
+    interpolation="log_linear",
+    convention="act360",
+    id="sofr",
+)
+
+dep = Deposit(effective=effective, termination="6m", rate=0.0, convention="act360")
+irs_1y = IRS(
+    effective=effective, termination="1y", frequency="a",
+    fixed_rate=0.0, convention="act360", float_convention="act360",
+)
+irs_2y = IRS(
+    effective=effective, termination="2y", frequency="a",
+    fixed_rate=0.0, convention="act360", float_convention="act360",
+)
+
+solver = Solver(
+    curves=[cal_curve],
+    instruments=[(dep, 0.0430), (irs_1y, 4.00), (irs_2y, 3.85)],
+)
+result = solver.iterate()
+assert result.converged
+
+df_before = float(solver.get_curve(0).discount_factor(datetime.date(2026, 6, 16)))
+
+solver_json = solver.to_json()
+restored_solver = Solver.from_json(solver_json)
+df_after = float(restored_solver.get_curve(0).discount_factor(datetime.date(2026, 6, 16)))
+
+df_before  # 0.9610212072035146
+df_after   # 0.9610212072035146
+assert abs(df_before - df_after) < 1e-10
+```
+
+## Inspecting JSON Structure
+
+Use `json.loads()` on the serialized string to inspect the internal structure.
+This is useful for debugging and integrating with external tools that consume
+JSON.
+
+```python continuation
+data = json.loads(curve.to_json())
+sorted(data.keys())  # ['calendar', 'convention', 'id', 'interpolator', 'modifier', 'nodes']
+```
+
+## Next Steps
+
+- [Bootstrap & Parametric Curves](rates/bootstrap-parametric) -- Iterative bootstrap and parametric curve models
+- [Bonds](credit/bonds) -- Bond analytics and spreads
+
+## MarketContext Serialization
+
+For serializing and restoring a complete market environment (curves, fixings,
+FX rates, calendars), see the
+[Market Context guide](market-context#serialization-round-trip).

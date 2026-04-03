@@ -1,0 +1,45 @@
+---
+title: "Credit"
+description: "Vade's credit analytics cover bond pricing and risk, credit default swaps, credit curve construction, and spread analysis. Compute settlement-aware bond measures, price CDS contracts, fit parametric curves to bond portfolios, and decompose yield into spread components."
+---
+
+Vade's credit analytics cover bond pricing and risk, credit default swaps, credit curve construction, and spread analysis. Compute settlement-aware bond measures, price CDS contracts, fit parametric curves to bond portfolios, and decompose yield into spread components.
+
+---
+
+## What's Covered
+
+- **Bonds** -- FixedRateBond with clean/dirty price, yield to maturity, duration, convexity, and Z-spread
+- **Bond variants** -- CallableBond (Hull-White tree pricing with OAS), ZeroCouponBond, Bill, AmortizingBond, StepUpBond, PIKBond, CappedFloatRateNote, FloatRateNote
+- **Credit derivatives** -- CDS (credit default swap) pricing and risk
+- **Credit curves** -- CreditImpliedCurve for hazard rate bootstrapping from CDS spreads
+- **Fitted curves** -- FittedBondCurve with NelsonSiegel, NelsonSiegelSvensson, and SmithWilson models
+- **Spread analysis** -- SpreadCurve, AssetSwap, I-spread, Z-spread, OAS decomposition
+
+## Key Concepts
+
+- **Credit spread** -- the yield premium a bond pays over the risk-free curve, compensating for default risk
+- **Hazard rate** -- the instantaneous conditional probability of default, implied from CDS market spreads
+- **Recovery rate** -- the fraction of notional recovered after a credit event, typically 40% for senior unsecured
+- **Z-spread** -- the constant spread added to the risk-free curve that reprices a bond to its market price
+- **OAS** -- option-adjusted spread; the Z-spread net of any embedded optionality (call, put)
+- **Duration** -- the sensitivity of a bond's price to a parallel shift in yield (modified or Macaulay)
+- **Convexity** -- the second-order sensitivity of price to yield; measures curvature of the price-yield relationship
+- **Asset swap spread** -- the spread over the floating index that equates a bond's cashflows to par in a swap structure
+
+## Quick Taste
+
+```python
+bond = FixedRateBond(effective=effective, termination="5y", coupon=0.045, frequency="s", convention="actactisda")
+dirty = float(bond.dirty_price(calibrated, settlement=effective))
+# A bond priced above par has a coupon exceeding the prevailing yield
+assert dirty > 100.0
+```
+
+## Guides
+
+- [Credit Curves & CDS](credit-curves-cds) -- Credit curve bootstrapping and CDS pricing
+- [Bonds](bonds) -- Settlement-aware bond analytics, duration, convexity, and spread measures
+- [Callable Bonds](callable-bonds) -- Hull-White trinomial tree pricing with OAS and effective risk measures
+- [Fitted Curves](fitted-curves) -- Parametric curve fitting to bond portfolios via nonlinear least-squares
+- [Spread Analytics](spread-analytics) -- Interpolated swap spreads (I-spread) and asset swap analysis

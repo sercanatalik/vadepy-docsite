@@ -1,0 +1,184 @@
+---
+title: "Pricing"
+description: "Price interest rate instruments against calibrated curves using `.rate()`,"
+---
+
+Price interest rate instruments against calibrated curves using `.rate()`,
+`.npv()`, and `.cashflows()`. This guide covers
+[IRS](../../api/instruments#irs), FRA, ZCS, OIS, and Deposit pricing against a
+[DiscountCurve](../../api/curves#discountcurve) calibrated from USD SOFR market
+data.
+
+---
+
+## Setup -- Calibrate a Curve
+
+Calibrate the shared USD SOFR dataset to produce a discount curve for pricing.
+
+```python
+import datetime
+from vade import DiscountCurve, IRS, FRA, ZCS, OIS, Deposit, Solver
+
+effective = datetime.date(2025, 6, 16)
+
+nodes = {
+    effective: 1.0,
+    datetime.date(2025, 7, 16): 1.0,
+    datetime.date(2025, 9, 16): 1.0,
+    datetime.date(2025, 12, 16): 1.0,
+    datetime.date(2026, 6, 16): 1.0,
+    datetime.date(2027, 6, 16): 1.0,
+    datetime.date(2028, 6, 16): 1.0,
+    datetime.date(2030, 6, 16): 1.0,
+    datetime.date(2032, 6, 16): 1.0,
+    datetime.date(2035, 6, 16): 1.0,
+}
+
+curve = DiscountCurve(
+    nodes, interpolation="log_linear", convention="act360", id="sofr"
+)
+
+dep_1m = Deposit(effective=effective, termination="1m", rate=0.0, convention="act360")
+fra_3m = FRA(effective=effective, termination="3m", fixed_rate=0.0, convention="act360")
+fra_6m = FRA(effective=effective, termination="6m", fixed_rate=0.0, convention="act360")
+irs_1y = IRS(effective=effective, termination="1y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=effective, termination="3y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=effective, termination="5y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_7y = IRS(effective=effective, termination="7y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_10y = IRS(effective=effective, termination="10y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+
+instruments = [
+    (dep_1m, 0.0430), (fra_3m, 0.0425), (fra_6m, 0.0415),
+    (irs_1y, 4.00), (irs_2y, 3.85), (irs_3y, 3.75),
+    (irs_5y, 3.70), (irs_7y, 3.75), (irs_10y, 3.85),
+]
+
+solver = Solver(curves=[curve], instruments=instruments)
+result = solver.iterate()
+assert result.converged
+calibrated = solver.get_curve(0)
+```
+
+## IRS Pricing
+
+Price a 5-year interest rate swap with a slightly off-market fixed rate. The
+`.rate()` method returns the par rate implied by the curve (in percentage form),
+and `.npv()` shows the mark-to-market value.
+
+```python
+irs = IRS(
+    effective=effective,
+    termination="5y",
+    frequency="a",
+    fixed_rate=3.80,
+    convention="act360",
+    float_convention="act360",
+)
+
+float(irs.rate(calibrated))  # 3.7000000000002484
+float(irs.npv(calibrated))   # -4542.843986271881
+```
+
+The par rate is 3.70% -- the curve-implied fair fixed rate. Because our swap
+pays 3.80% fixed (above par), its NPV is negative from the fixed-rate payer's
+perspective.
+
+## FRA Pricing
+
+Price a forward rate agreement covering the 3-month to 6-month period.
+[FRA](../../api/instruments#fra) `.rate()` returns the implied forward rate in
+decimal form.
+
+```python
+fra = FRA(
+    effective=datetime.date(2025, 9, 16),
+    termination=datetime.date(2025, 12, 16),
+    fixed_rate=4.20,
+    convention="act360",
+)
+
+float(fra.rate(calibrated))  # 0.040488991946056214
+float(fra.npv(calibrated))   # -323.57645004154983
+```
+
+## ZCS Pricing
+
+Price a 3-year zero coupon swap. [ZCS](../../api/instruments#zcs) `.rate()`
+returns the par zero-coupon rate in percentage form.
+
+```python
+zcs = ZCS(
+    effective=effective,
+    termination="3y",
+    fixed_rate=3.80,
+    convention="act360",
+    float_convention="act360",
+)
+
+float(zcs.rate(calibrated))  # 7.777073194074961
+float(zcs.npv(calibrated))   # -1666.5413047417533
+```
+
+## OIS Pricing
+
+Price a 2-year overnight index swap. [OIS](../../api/instruments#ois) is
+structurally similar to IRS but designed for overnight rate compounding.
+
+```python
+ois = OIS(
+    effective=effective,
+    termination="2y",
+    frequency="a",
+    fixed_rate=3.90,
+    convention="act360",
+    float_convention="act360",
+)
+
+float(ois.rate(calibrated))  # 3.8500000000003856
+float(ois.npv(calibrated))   # -956.7775507331098
+```
+
+## Deposit Pricing
+
+Price a 1-month deposit. [Deposit](../../api/instruments#deposit) `.rate()`
+returns the implied deposit rate in decimal form.
+
+```python
+dep = Deposit(
+    effective=effective,
+    termination="1m",
+    rate=0.0440,
+    convention="act360",
+)
+
+float(dep.rate(calibrated))  # 0.04299999999999926
+float(dep.npv(calibrated))   # -83.03578842494552
+```
+
+## Cashflow Analysis
+
+The `.cashflows()` method returns a [Polars DataFrame](../../api/cashflows)
+with period-level detail for each leg of the instrument. Each row represents
+one accrual period with its notional, rate, cashflow amount, discount factor,
+and NPV contribution.
+
+```python
+irs = IRS(
+    effective=effective,
+    termination="5y",
+    frequency="a",
+    fixed_rate=3.80,
+    convention="act360",
+    float_convention="act360",
+)
+
+df = irs.cashflows(calibrated)
+df.columns  # ['Type', 'start', 'end', 'payment', 'Ccy', 'Notional', 'fixing_rate', 'Rate', 'Spread', 'DCF', 'Cashflow', 'DF', 'NPV']
+df.shape  # (14, 13)
+```
+
+## Next Steps
+
+- [Calibration](../calibration) -- multi-curve calibration and solver algorithms
+- [Risk](risk) -- delta, gamma, and bucket-level sensitivities

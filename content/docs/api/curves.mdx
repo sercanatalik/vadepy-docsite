@@ -1,0 +1,877 @@
+---
+title: "Curves"
+description: "Discount factor, zero rate, forward rate, spread, composite, parametric, and implied curve classes."
+---
+
+Discount factor, zero rate, forward rate, spread, composite, parametric, and implied curve classes.
+
+All types are available via flat import:
+
+```bash
+from vade import DiscountCurve, LineCurve, ForwardCurve, SpreadCurve, CompositeCurve, TurnOfYearCurve, FXImpliedCurve, NelsonSiegel, NelsonSiegelSvensson, SmithWilson, IRImpliedCurve, CreditImpliedCurve, FittedBondCurve
+```
+
+See [Conventions](../conventions) for all accepted string parameter values.
+
+**Contents:**
+[DiscountCurve](#discountcurve) | [LineCurve](#linecurve) | [ForwardCurve](#forwardcurve) | [SpreadCurve](#spreadcurve) | [CompositeCurve](#compositecurve) | [TurnOfYearCurve](#turnofyearcurve) | [FXImpliedCurve](#fximpliedcurve) | [NelsonSiegel](#nelsonsiegel) | [NelsonSiegelSvensson](#nelsonsiegelsvensson) | [SmithWilson](#smithwilson) | [IRImpliedCurve](#irimpliedcurve) | [CreditImpliedCurve](#creditimpliedcurve) | [FittedBondCurve](#fittedbondcurve)
+
+______________________________________________________________________
+
+## DiscountCurve
+
+Discount factor curve with interpolated DF values. _Rust-backed._
+
+### Constructor
+
+```bash
+DiscountCurve(nodes, *, interpolation="log_linear", id="curve", convention="act360", modifier="modified_following", calendar=None, t=None, endpoints="not_a_knot")
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `nodes` | `NodeValues` | *required* | Discount factor nodes as `{date: float}` dict or `([dates], [values])` tuple. Positional-only. |
+| `interpolation` | `str` | `"log_linear"` | Interpolation method for discount factors |
+| `id` | `str` | `"curve"` | Curve identifier |
+| `convention` | `str` | `"act360"` | Day count convention for rate calculations |
+| `modifier` | `str` | `"modified_following"` | Business day adjustment rule |
+| `calendar` | `BusinessCalendar` or `None` | `None` | Business day [calendar](calendar#businesscalendar) |
+| `t` | `list[datetime.date]` or `None` | `None` | Knot dates for B-spline interpolation |
+| `endpoints` | `str` | `"not_a_knot"` | Endpoint condition for spline methods |
+
+`NodeValues` accepts `Dict[datetime.date, float | Dual | Dual2]` or `Tuple[List[datetime.date], List[float | Dual | Dual2]]`.
+
+See [Conventions](../conventions#interpolation-methods) for accepted `interpolation` values. See [Conventions](../conventions#day-count-conventions) for accepted `convention` values.
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.discount_factor(date)` | `float \| Dual \| Dual2` | Discount factor at date |
+| `.zero_rate(start, end)` | `float \| Dual \| Dual2` | Continuously compounded zero rate between dates |
+| `.forward_rate(start, end)` | `float \| Dual \| Dual2` | Forward rate between dates |
+| `.shift(bp)` | `DiscountCurve` | Parallel shift by bp basis points |
+| `.translate(days)` | `DiscountCurve` | Translate curve forward by N days |
+| `.roll(days)` | `DiscountCurve` | Roll curve forward (time decay) |
+| `.to_json()` | `str` | Serialize to JSON string |
+| `.from_json(s)` (static) | `DiscountCurve` | Deserialize from JSON string |
+
+Return types are `Union[float, Dual, Dual2]` -- see the [type system guide](../getting-started/type-system#union-return-types) for when each variant appears.
+
+### Example
+
+```python
+import datetime
+from vade import DiscountCurve
+
+nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.97,
+    datetime.date(2026, 1, 1): 0.94,
+}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+
+df = curve.discount_factor(datetime.date(2024, 7, 1))
+assert 0.97 < df < 1.0  # interpolated mid-year discount factor
+
+zr = curve.zero_rate(datetime.date(2024, 1, 1), datetime.date(2025, 1, 1))
+assert 0.02 < zr < 0.04  # zero rate implied by DF=0.97
+
+shifted = curve.shift(10)  # shift by 10 basis points
+```
+
+______________________________________________________________________
+
+## LineCurve
+
+Value-based curve for zero rates, spreads, or other quantities. _Rust-backed._
+
+### Constructor
+
+```bash
+LineCurve(nodes, *, interpolation="linear", id="curve", convention="act360", modifier="modified_following", calendar=None, t=None, endpoints="not_a_knot")
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `nodes` | `NodeValues` | *required* | Value nodes as `{date: float}` dict or `([dates], [values])` tuple. Positional-only. |
+| `interpolation` | `str` | `"linear"` | Interpolation method |
+| `id` | `str` | `"curve"` | Curve identifier |
+| `convention` | `str` | `"act360"` | Day count convention |
+| `modifier` | `str` | `"modified_following"` | Business day adjustment rule |
+| `calendar` | `BusinessCalendar` or `None` | `None` | Business day [calendar](calendar#businesscalendar) |
+| `t` | `list[datetime.date]` or `None` | `None` | Knot dates for B-spline interpolation |
+| `endpoints` | `str` | `"not_a_knot"` | Endpoint condition for spline methods |
+
+See [Conventions](../conventions#interpolation-methods) for accepted `interpolation` values.
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.discount_factor(date)` | `float \| Dual \| Dual2` | Discount factor at date (derived from stored values) |
+| `.zero_rate(start, end)` | `float \| Dual \| Dual2` | Zero rate between dates |
+| `.forward_rate(start, end)` | `float \| Dual \| Dual2` | Forward rate between dates |
+| `.shift(bp)` | `LineCurve` | Parallel shift by bp basis points |
+| `.translate(days)` | `LineCurve` | Translate curve forward by N days |
+| `.roll(days)` | `LineCurve` | Roll curve forward (time decay) |
+| `.to_json()` | `str` | Serialize to JSON string |
+| `.from_json(s)` (static) | `LineCurve` | Deserialize from JSON string |
+
+### Example
+
+```python
+import datetime
+from vade import LineCurve
+
+nodes = {
+    datetime.date(2024, 1, 1): 0.030,
+    datetime.date(2025, 1, 1): 0.035,
+    datetime.date(2026, 1, 1): 0.040,
+}
+curve = LineCurve(nodes, interpolation="linear", convention="act365f")
+
+zr = curve.zero_rate(datetime.date(2024, 1, 1), datetime.date(2024, 7, 1))
+assert 0.03 <= zr <= 0.035  # interpolated mid-year rate
+
+fr = curve.forward_rate(datetime.date(2024, 1, 1), datetime.date(2025, 1, 1))
+assert fr > 0  # positive forward rate
+```
+
+______________________________________________________________________
+
+## ForwardCurve
+
+Forward rate curve with native forward rate representation. _Rust-backed._
+
+Nodes represent instantaneous forward rates (not discount factors). Uses Gauss-Legendre quadrature for discount factor integration.
+
+### Constructor
+
+```bash
+ForwardCurve(nodes, *, interpolation="flat_forward", id="forward_curve", convention="act365f", modifier="modified_following", calendar=None, t=None, endpoints="not_a_knot")
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `nodes` | `NodeValues` | *required* | Forward rate nodes as `{date: float}` dict or `([dates], [values])` tuple. Positional-only. |
+| `interpolation` | `str` | `"flat_forward"` | Interpolation method for forward rates |
+| `id` | `str` | `"forward_curve"` | Curve identifier |
+| `convention` | `str` | `"act365f"` | Day count convention |
+| `modifier` | `str` | `"modified_following"` | Business day adjustment rule |
+| `calendar` | `BusinessCalendar` or `None` | `None` | Business day [calendar](calendar#businesscalendar) |
+| `t` | `list[datetime.date]` or `None` | `None` | Knot dates for B-spline interpolation |
+| `endpoints` | `str` | `"not_a_knot"` | Endpoint condition for spline methods |
+
+See [Conventions](../conventions#interpolation-methods) for accepted `interpolation` values.
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.discount_factor(date)` | `float \| Dual \| Dual2` | Discount factor at date (integrated from forward rates) |
+| `.zero_rate(start, end)` | `float \| Dual \| Dual2` | Zero rate between dates |
+| `.forward_rate(start, end)` | `float \| Dual \| Dual2` | Forward rate between dates |
+| `.shift(bp)` | `ForwardCurve` | Parallel shift by bp basis points |
+| `.translate(days)` | `ForwardCurve` | Translate curve forward by N days |
+| `.roll(days)` | `ForwardCurve` | Roll curve forward (time decay) |
+| `.to_json()` | `str` | Serialize to JSON string |
+| `.from_json(s)` (static) | `ForwardCurve` | Deserialize from JSON string |
+
+### Example
+
+```python
+import datetime
+from vade import ForwardCurve
+
+# Instantaneous forward rates (per-day units matching internal x-axis)
+nodes = {
+    datetime.date(2024, 1, 1): 8.2e-5,
+    datetime.date(2025, 1, 1): 9.0e-5,
+    datetime.date(2026, 1, 1): 1.0e-4,
+}
+curve = ForwardCurve(nodes, interpolation="flat_forward", convention="act365f")
+
+df = curve.discount_factor(datetime.date(2025, 1, 1))
+assert 0.9 < df < 1.0  # discount factor integrated from forward rates
+
+fr = curve.forward_rate(datetime.date(2024, 1, 1), datetime.date(2025, 1, 1))
+assert 0.02 < fr < 0.04  # annualized forward rate
+```
+
+______________________________________________________________________
+
+## SpreadCurve
+
+Spread curve: base curve plus additive or multiplicative spread. _Rust-backed._
+
+The base curve is passed as a JSON string (from `curve.to_json()`). Spread nodes are zero-rate spreads at specified dates.
+
+### Constructor
+
+```bash
+SpreadCurve(base_json, spread_nodes, *, mode="additive", spread_interpolation="linear", convention="act365f", id="spread_curve")
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `base_json` | `str` | *required* | JSON string of the base curve (from `.to_json()`). Positional-only. |
+| `spread_nodes` | `NodeValues` | *required* | Spread values as `{date: float}` dict or `([dates], [values])` tuple. Positional-only. |
+| `mode` | `str` | `"additive"` | Spread mode: `"additive"` or `"multiplicative"` |
+| `spread_interpolation` | `str` | `"linear"` | Interpolation method for spread values |
+| `convention` | `str` | `"act365f"` | Day count convention |
+| `id` | `str` | `"spread_curve"` | Curve identifier |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.discount_factor(date)` | `float \| Dual \| Dual2` | Discount factor at date (base + spread) |
+| `.zero_rate(start, end)` | `float \| Dual \| Dual2` | Zero rate between dates |
+| `.forward_rate(start, end)` | `float \| Dual \| Dual2` | Forward rate between dates |
+| `.to_json()` | `str` | Serialize to JSON string |
+| `.from_json(s)` (static) | `SpreadCurve` | Deserialize from JSON string |
+
+Note: SpreadCurve does not support `.shift()`, `.translate()`, or `.roll()`.
+
+### Example
+
+```python
+import datetime
+from vade import DiscountCurve, SpreadCurve
+
+base_nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.97,
+    datetime.date(2026, 1, 1): 0.94,
+}
+base = DiscountCurve(base_nodes, interpolation="log_linear", convention="act365f")
+base_json = base.to_json()
+
+spread_nodes = {
+    datetime.date(2024, 1, 1): 0.001,
+    datetime.date(2025, 1, 1): 0.002,
+    datetime.date(2026, 1, 1): 0.003,
+}
+spread = SpreadCurve(base_json, spread_nodes, mode="additive")
+
+df = spread.discount_factor(datetime.date(2025, 1, 1))
+assert 0.9 < df < 1.0  # spread-adjusted discount factor
+```
+
+______________________________________________________________________
+
+## CompositeCurve
+
+Composite curve combining multiple curves. _Rust-backed._
+
+Discount factors are computed as the product of discount factors from all component curves.
+
+### Constructor
+
+```bash
+CompositeCurve(curves, id=None)
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `curves` | `list` | *required* | List of curve objects to combine |
+| `id` | `str` or `None` | `None` | Curve identifier |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.discount_factor(date)` | `float \| Dual \| Dual2` | Product of component discount factors at date |
+| `.zero_rate(start, end)` | `float \| Dual \| Dual2` | Zero rate between dates |
+| `.forward_rate(start, end)` | `float \| Dual \| Dual2` | Forward rate between dates |
+| `.shift(bp)` | `CompositeCurve` | Parallel shift by bp basis points |
+| `.translate(days)` | `CompositeCurve` | Translate curve forward by N days |
+| `.to_json()` | `str` | Serialize to JSON string |
+| `.from_json(s)` (static) | `CompositeCurve` | Deserialize from JSON string |
+
+Note: CompositeCurve does not support `.roll()`.
+
+### Example
+
+```python
+import datetime
+from vade import DiscountCurve, CompositeCurve
+
+nodes1 = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.98,
+    datetime.date(2026, 1, 1): 0.96,
+}
+nodes2 = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.99,
+    datetime.date(2026, 1, 1): 0.98,
+}
+curve1 = DiscountCurve(nodes1, convention="act365f")
+curve2 = DiscountCurve(nodes2, convention="act365f")
+
+composite = CompositeCurve([curve1, curve2])
+df = composite.discount_factor(datetime.date(2025, 1, 1))
+assert 0.96 < df < 0.98  # product of 0.98 * 0.99
+```
+
+______________________________________________________________________
+
+## TurnOfYearCurve
+
+Turn-of-year adjusted curve with date-specific bumps. _Rust-backed._
+
+The inner curve is passed as a JSON string (from `curve.to_json()`). Bumps are `{date: bp_adjustment}` for turn-of-year effects.
+
+### Constructor
+
+```bash
+TurnOfYearCurve(inner_json, bumps, *, convention="act365f", calendar=None, id="toy_curve")
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `inner_json` | `str` | *required* | JSON string of the inner curve (from `.to_json()`). Positional-only. |
+| `bumps` | `Dict[datetime.date, float]` | *required* | Date-specific basis point adjustments. Positional-only. |
+| `convention` | `str` | `"act365f"` | Day count convention |
+| `calendar` | `BusinessCalendar` or `None` | `None` | Business day [calendar](calendar#businesscalendar) |
+| `id` | `str` | `"toy_curve"` | Curve identifier |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.discount_factor(date)` | `float \| Dual \| Dual2` | Discount factor at date (inner + bumps) |
+| `.zero_rate(start, end)` | `float \| Dual \| Dual2` | Zero rate between dates |
+| `.forward_rate(start, end)` | `float \| Dual \| Dual2` | Forward rate between dates |
+| `.to_json()` | `str` | Serialize to JSON string |
+| `.from_json(s)` (static) | `TurnOfYearCurve` | Deserialize from JSON string |
+
+Note: TurnOfYearCurve does not support `.shift()`, `.translate()`, or `.roll()`.
+
+### Example
+
+```python
+import datetime
+from vade import DiscountCurve, TurnOfYearCurve
+
+nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.97,
+    datetime.date(2026, 1, 1): 0.94,
+}
+inner = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+inner_json = inner.to_json()
+
+bumps = {
+    datetime.date(2024, 12, 31): 5.0,
+    datetime.date(2025, 12, 31): 3.0,
+}
+toy = TurnOfYearCurve(inner_json, bumps, convention="act365f")
+
+df = toy.discount_factor(datetime.date(2025, 1, 1))
+assert 0.9 < df < 1.0  # adjusted discount factor
+```
+
+______________________________________________________________________
+
+## FXImpliedCurve
+
+Proxy curve for FX-adjusted discounting. _Rust-backed._
+
+Used in cross-currency frameworks where discounting in one currency is proxied through another via FX rates and interest rate differentials.
+
+### Constructor
+
+```bash
+FXImpliedCurve(cashflow_ccy, collateral_ccy, fx_rates, fx_settlements, collateral_curve, cashflow_curve, id=None)
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `cashflow_ccy` | `str` | *required* | Currency of the cashflows (e.g., `"eur"`) |
+| `collateral_ccy` | `str` | *required* | Currency of the collateral (e.g., `"usd"`) |
+| `fx_rates` | `FXRates` | *required* | FX rates object for currency conversion |
+| `fx_settlements` | `Dict[str, datetime.date]` | *required* | Settlement dates per currency |
+| `collateral_curve` | `DiscountCurve` | *required* | Discount curve in collateral currency |
+| `cashflow_curve` | `DiscountCurve` | *required* | Discount curve in cashflow currency |
+| `id` | `str` or `None` | `None` | Curve identifier |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.discount_factor(date)` | `float \| Dual \| Dual2` | FX-adjusted discount factor at date |
+| `.zero_rate(start, end)` | `float \| Dual \| Dual2` | Zero rate between dates |
+| `.forward_rate(start, end)` | `float \| Dual \| Dual2` | Forward rate between dates |
+| `.shift(bp)` | `FXImpliedCurve` | Parallel shift by bp basis points |
+| `.translate(days)` | `FXImpliedCurve` | Translate curve forward by N days |
+| `.to_json()` | `str` | Serialize to JSON string |
+| `.from_json(s)` (static) | `FXImpliedCurve` | Deserialize from JSON string |
+
+Note: FXImpliedCurve does not support `.roll()`.
+
+### Example
+
+```python
+import datetime
+from vade import DiscountCurve, FXRates, FXImpliedCurve
+
+usd_nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.96,
+    datetime.date(2026, 1, 1): 0.92,
+}
+eur_nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.97,
+    datetime.date(2026, 1, 1): 0.94,
+}
+usd_curve = DiscountCurve(usd_nodes, convention="act365f", id="usd")
+eur_curve = DiscountCurve(eur_nodes, convention="act365f", id="eur")
+
+fx = FXRates({"eurusd": 1.10}, datetime.date(2024, 1, 1))
+settlements = {"usd": datetime.date(2024, 1, 3), "eur": datetime.date(2024, 1, 3)}
+
+fx_implied = FXImpliedCurve("eur", "usd", fx, settlements, usd_curve, eur_curve)
+df = fx_implied.discount_factor(datetime.date(2025, 1, 1))
+assert 0.9 < float(df) < 1.0  # FX-adjusted discount factor (returns Dual due to FXRates AD)
+```
+
+______________________________________________________________________
+
+## NelsonSiegel
+
+Nelson-Siegel parametric yield curve model. _Rust-backed._
+
+Models the yield curve as a function of three factors (level, slope, curvature) with a single decay parameter tau.
+
+### Constructor
+
+```bash
+NelsonSiegel(beta0, beta1, beta2, tau, base_date, convention="act365f", id="")
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `beta0` | `float \| Dual \| Dual2` | *required* | Level (long-term rate) |
+| `beta1` | `float \| Dual \| Dual2` | *required* | Slope (short-term component) |
+| `beta2` | `float \| Dual \| Dual2` | *required* | Curvature (medium-term hump) |
+| `tau` | `float \| Dual \| Dual2` | *required* | Decay parameter |
+| `base_date` | `datetime.date` | *required* | Base date for the curve |
+| `convention` | `str` | `"act365f"` | Day count convention |
+| `id` | `str` | `""` | Curve identifier |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.discount_factor(date)` | `float \| Dual \| Dual2` | Discount factor at date |
+| `.zero_rate(start, end)` | `float \| Dual \| Dual2` | Zero rate between dates |
+| `.forward_rate(start, end)` | `float \| Dual \| Dual2` | Forward rate between dates |
+| `.shift(bp)` | `NelsonSiegel` | Parallel shift by bp basis points |
+| `.translate(days)` | `NelsonSiegel` | Translate curve forward by N days |
+| `.roll(days)` | `NelsonSiegel` | Roll curve forward (time decay) |
+| `.to_json()` | `str` | Serialize to JSON string |
+| `.from_json(s)` (static) | `NelsonSiegel` | Deserialize from JSON string |
+
+### Example
+
+```python
+import datetime
+from vade import NelsonSiegel
+
+ns = NelsonSiegel(
+    beta0=0.05,
+    beta1=-0.02,
+    beta2=0.01,
+    tau=1.5,
+    base_date=datetime.date(2024, 1, 1),
+    convention="act365f",
+)
+
+df = ns.discount_factor(datetime.date(2025, 1, 1))
+assert 0.9 < df < 1.0  # discount factor from parametric model
+
+zr = ns.zero_rate(datetime.date(2024, 1, 1), datetime.date(2034, 1, 1))
+assert 0.04 < zr < 0.06  # long-term rate converges to beta0
+```
+
+______________________________________________________________________
+
+## NelsonSiegelSvensson
+
+Nelson-Siegel-Svensson parametric yield curve model. _Rust-backed._
+
+Extends Nelson-Siegel with a second curvature term and decay parameter for more flexible curve shapes.
+
+### Constructor
+
+```bash
+NelsonSiegelSvensson(beta0, beta1, beta2, beta3, tau1, tau2, base_date, convention="act365f", id="")
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `beta0` | `float \| Dual \| Dual2` | *required* | Level (long-term rate) |
+| `beta1` | `float \| Dual \| Dual2` | *required* | Slope (short-term component) |
+| `beta2` | `float \| Dual \| Dual2` | *required* | First curvature term |
+| `beta3` | `float \| Dual \| Dual2` | *required* | Second curvature term |
+| `tau1` | `float \| Dual \| Dual2` | *required* | First decay parameter |
+| `tau2` | `float \| Dual \| Dual2` | *required* | Second decay parameter |
+| `base_date` | `datetime.date` | *required* | Base date for the curve |
+| `convention` | `str` | `"act365f"` | Day count convention |
+| `id` | `str` | `""` | Curve identifier |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.discount_factor(date)` | `float \| Dual \| Dual2` | Discount factor at date |
+| `.zero_rate(start, end)` | `float \| Dual \| Dual2` | Zero rate between dates |
+| `.forward_rate(start, end)` | `float \| Dual \| Dual2` | Forward rate between dates |
+| `.shift(bp)` | `NelsonSiegelSvensson` | Parallel shift by bp basis points |
+| `.translate(days)` | `NelsonSiegelSvensson` | Translate curve forward by N days |
+| `.roll(days)` | `NelsonSiegelSvensson` | Roll curve forward (time decay) |
+| `.to_json()` | `str` | Serialize to JSON string |
+| `.from_json(s)` (static) | `NelsonSiegelSvensson` | Deserialize from JSON string |
+
+### Example
+
+```python
+import datetime
+from vade import NelsonSiegelSvensson
+
+nss = NelsonSiegelSvensson(
+    beta0=0.05,
+    beta1=-0.02,
+    beta2=0.01,
+    beta3=0.005,
+    tau1=1.5,
+    tau2=5.0,
+    base_date=datetime.date(2024, 1, 1),
+    convention="act365f",
+)
+
+df = nss.discount_factor(datetime.date(2025, 1, 1))
+assert 0.9 < df < 1.0  # discount factor from parametric model
+
+zr = nss.zero_rate(datetime.date(2024, 1, 1), datetime.date(2034, 1, 1))
+assert 0.04 < zr < 0.06  # long-term rate converges to beta0
+```
+
+______________________________________________________________________
+
+## SmithWilson
+
+Smith-Wilson parametric curve for regulatory yield curve extrapolation. _Rust-backed._
+
+Used in insurance regulation (e.g., Solvency II) for extrapolating yield curves beyond the last liquid point toward an ultimate forward rate (UFR).
+
+### Constructor
+
+```bash
+SmithWilson(dates, rates, ufr, alpha, base_date, convention="act365f", id="")
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `dates` | `list[datetime.date]` | *required* | Knot dates for observed rates |
+| `rates` | `list[float]` | *required* | Observed zero rates at knot dates |
+| `ufr` | `float` | *required* | Ultimate forward rate (long-term target rate) |
+| `alpha` | `float` | *required* | Speed of convergence to UFR |
+| `base_date` | `datetime.date` | *required* | Base date for the curve |
+| `convention` | `str` | `"act365f"` | Day count convention |
+| `id` | `str` | `""` | Curve identifier |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.discount_factor(date)` | `float \| Dual \| Dual2` | Discount factor at date |
+| `.zero_rate(start, end)` | `float \| Dual \| Dual2` | Zero rate between dates |
+| `.forward_rate(start, end)` | `float \| Dual \| Dual2` | Forward rate between dates |
+| `.shift(bp)` | `SmithWilson` | Parallel shift by bp basis points |
+| `.translate(days)` | `SmithWilson` | Translate curve forward by N days |
+| `.roll(days)` | `SmithWilson` | Roll curve forward (time decay) |
+| `.to_json()` | `str` | Serialize to JSON string |
+| `.from_json(s)` (static) | `SmithWilson` | Deserialize from JSON string |
+
+### Example
+
+```python
+import datetime
+from vade import SmithWilson
+
+sw = SmithWilson(
+    dates=[
+        datetime.date(2025, 1, 1),
+        datetime.date(2029, 1, 1),
+        datetime.date(2034, 1, 1),
+        datetime.date(2044, 1, 1),
+    ],
+    rates=[0.030, 0.032, 0.035, 0.038],
+    ufr=0.035,
+    alpha=0.1,
+    base_date=datetime.date(2024, 1, 1),
+    convention="act365f",
+)
+
+df = sw.discount_factor(datetime.date(2029, 1, 1))
+assert 0.8 < df < 1.0  # discount factor from Smith-Wilson model
+
+zr = sw.zero_rate(datetime.date(2024, 1, 1), datetime.date(2029, 1, 1))
+assert 0.02 < zr < 0.05  # zero rate at 5-year point
+```
+
+______________________________________________________________________
+
+## IRImpliedCurve
+
+Implied curve for bucket-level delta risk reporting. _Rust-backed._
+
+Constructs a curve from a source [DiscountCurve](#discountcurve) with custom tenor buckets. Used to compute bucket-level risk sensitivities.
+
+### Constructor
+
+```bash
+IRImpliedCurve(source, ref_date, tenors, calendar, convention="act365f")
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `source` | `DiscountCurve` | *required* | Source discount curve to re-bucket |
+| `ref_date` | `datetime.date` | *required* | Reference date for tenor resolution |
+| `tenors` | `list[str]` | *required* | Tenor bucket labels (e.g., `["1Y", "2Y", "5Y", "10Y"]`) |
+| `calendar` | `BusinessCalendar` | *required* | [Calendar](calendar#businesscalendar) for tenor date resolution |
+| `convention` | `str` | `"act365f"` | Day count convention |
+
+See [Conventions](../conventions#tenor-strings) for tenor string format.
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.discount_factor(date)` | `float \| Dual \| Dual2` | Discount factor at date |
+| `.zero_rate(start, end)` | `float \| Dual \| Dual2` | Zero rate between dates |
+| `.forward_rate(start, end)` | `float \| Dual \| Dual2` | Forward rate between dates |
+| `.bucket_delta(instrument)` | `polars.DataFrame` | Compute bucket-level delta risk for an instrument |
+| `.tenor_labels()` | `list[str]` | Return the tenor bucket labels |
+
+Note: IRImpliedCurve does not support `.shift()`, `.translate()`, `.roll()`, `.to_json()`, or `.from_json()`.
+
+### Example
+
+```python
+import datetime
+from vade import DiscountCurve, IRImpliedCurve, BusinessCalendar
+
+nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.97,
+    datetime.date(2026, 1, 1): 0.94,
+    datetime.date(2029, 1, 1): 0.85,
+    datetime.date(2034, 1, 1): 0.72,
+}
+source = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+
+implied = IRImpliedCurve(
+    source=source,
+    ref_date=datetime.date(2024, 1, 1),
+    tenors=["1Y", "2Y", "5Y", "10Y"],
+    calendar=BusinessCalendar("NYC"),
+)
+
+implied.tenor_labels()  # ['1Y', '2Y', '5Y', '10Y']
+
+df = implied.discount_factor(datetime.date(2025, 1, 1))
+assert 0.96 < df < 0.98  # consistent with source curve
+```
+
+______________________________________________________________________
+
+## CreditImpliedCurve
+
+Credit implied curve with piecewise flat hazard rates. _Rust-backed._
+
+Models credit risk through survival probabilities derived from hazard rates. Used for CDS pricing and credit risk analysis.
+
+### Constructor
+
+```bash
+CreditImpliedCurve(nodes, convention="act360", recovery_rate=0.4, id="credit_curve")
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `nodes` | `NodeValues` | *required* | Survival probability nodes as `{date: float}` dict or `([dates], [values])` tuple |
+| `convention` | `str` | `"act360"` | Day count convention |
+| `recovery_rate` | `float` | `0.4` | Recovery rate assumption (0.0 to 1.0) |
+| `id` | `str` | `"credit_curve"` | Curve identifier |
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `.id` | `str` | Curve identifier |
+| `.recovery_rate` | `float` | Recovery rate assumption |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.survival_probability(date)` | `float \| Dual \| Dual2` | Survival probability at date |
+| `.discount_factor(date)` | `float \| Dual \| Dual2` | Discount factor at date |
+| `.zero_rate(start, end)` | `float \| Dual \| Dual2` | Zero rate between dates |
+| `.forward_rate(start, end)` | `float \| Dual \| Dual2` | Forward rate between dates |
+| `.shift(bp)` | `CreditImpliedCurve` | Parallel shift by bp basis points |
+| `.translate(days)` | `CreditImpliedCurve` | Translate curve forward by N days |
+| `.to_json()` | `str` | Serialize to JSON string |
+| `.from_json(s)` (static) | `CreditImpliedCurve` | Deserialize from JSON string |
+
+Note: CreditImpliedCurve does not support `.roll()`.
+
+### Example
+
+```python
+import datetime
+from vade import CreditImpliedCurve
+
+nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.98,
+    datetime.date(2026, 1, 1): 0.95,
+    datetime.date(2029, 1, 1): 0.88,
+}
+credit = CreditImpliedCurve(nodes, convention="act360", recovery_rate=0.4)
+
+sp = credit.survival_probability(datetime.date(2025, 1, 1))
+assert 0.0 < sp < 1.0  # survival probability at 1 year
+
+credit.id  # 'credit_curve'
+credit.recovery_rate  # 0.4
+```
+
+______________________________________________________________________
+
+## FittedBondCurve
+
+Parametric curve fitted to bond market prices via nonlinear least-squares. _Python wrapper composing NS/NSS/SmithWilson fitting._
+
+Fits a [NelsonSiegel](#nelsonsiegel), [NelsonSiegelSvensson](#nelsonsiegelsvensson), or [SmithWilson](#smithwilson) curve to observed bond clean prices. Uses Levenberg-Marquardt optimization with inverse-duration weighting.
+
+See also: [Fitted Curves Guide](../guides/credit/fitted-curves) for end-to-end fitting workflows.
+
+### Constructor
+
+```bash
+FittedBondCurve(bonds, clean_prices, settlement, model="NS", *, convention="act365f", base_date=None, weights=None, initial_params=None, max_iter=200, func_tol=1e-10, ufr=None, alpha=None, id="")
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `bonds` | `list[FixedRateBond]` | *required* | Portfolio of bonds to fit. Positional. |
+| `clean_prices` | `list[float]` | *required* | Observed clean prices for each bond. Positional. |
+| `settlement` | `datetime.date` | *required* | Settlement/valuation date. Positional. |
+| `model` | `str` | `"NS"` | Model type: `"NS"` (Nelson-Siegel), `"NSS"` (Nelson-Siegel-Svensson), or `"SW"` (Smith-Wilson). Positional. |
+| `convention` | `str` | `"act365f"` | Day count convention for rate calculations |
+| `base_date` | `datetime.date` or `None` | `None` | Base date for curve (defaults to settlement) |
+| `weights` | `list[float]` or `None` | `None` | Custom fitting weights (overrides inverse-duration default) |
+| `initial_params` | `list[float]` or `None` | `None` | Initial parameter guess for optimizer |
+| `max_iter` | `int` | `200` | Maximum Levenberg-Marquardt iterations |
+| `func_tol` | `float` | `1e-10` | Function tolerance for convergence |
+| `ufr` | `float` or `None` | `None` | Ultimate forward rate (required for SW model) |
+| `alpha` | `float` or `None` | `None` | Convergence speed (required for SW model) |
+| `id` | `str` | `""` | Curve identifier |
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `.rmse` | `float` | Root mean square pricing error |
+| `.converged` | `bool` | Whether optimization converged |
+| `.iterations` | `int` | Number of iterations used |
+| `.objective` | `float` | Final objective function value |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.discount_factor(date)` | `float` | Discount factor at date |
+| `.zero_rate(start, end)` | `float` | Zero rate between dates |
+| `.forward_rate(start, end)` | `float` | Forward rate between dates |
+| `.pricing_errors()` | `list[float]` | Per-bond pricing errors (model price - market price) |
+| `.curve()` | `NelsonSiegel \| NelsonSiegelSvensson \| SmithWilson` | Extract the fitted inner curve |
+
+### Example
+
+```python
+import datetime
+from vade import FittedBondCurve, FixedRateBond, NelsonSiegel
+
+settlement = datetime.date(2024, 1, 15)
+
+# Create a portfolio of bonds with different maturities
+bonds = []
+for maturity_year, coupon in [(2026, 0.03), (2027, 0.035), (2029, 0.04), (2031, 0.042), (2034, 0.045)]:
+    bond = FixedRateBond(
+        effective=settlement,
+        termination=datetime.date(maturity_year, 1, 15),
+        frequency="s",
+        convention="act365f",
+        coupon=coupon,
+        face_value=100.0,
+    )
+    bonds.append(bond)
+
+# Observed clean prices
+clean_prices = [99.5, 99.0, 98.5, 97.0, 95.0]
+
+# Fit Nelson-Siegel model
+fc = FittedBondCurve(bonds, clean_prices, settlement, model="NS")
+
+assert fc.converged
+assert fc.rmse < 1.0  # good fit quality
+
+# Query the fitted curve
+df = fc.discount_factor(datetime.date(2025, 1, 15))
+assert 0.9 < df < 1.0  # reasonable 1Y discount factor
+
+zr = fc.zero_rate(settlement, datetime.date(2029, 1, 15))
+assert 0.0 < zr < 0.10  # positive 5Y zero rate
+
+# Per-bond pricing errors
+errors = fc.pricing_errors()
+assert len(errors) == 5  # one per bond
+
+# Extract the fitted inner curve
+inner = fc.curve()
+assert isinstance(inner, NelsonSiegel)
+```

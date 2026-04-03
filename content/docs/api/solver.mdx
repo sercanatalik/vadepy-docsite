@@ -1,0 +1,268 @@
+---
+title: "Solver"
+description: "Multi-curve calibration solver with Levenberg-Marquardt, Gauss-Newton, and gradient descent algorithms, plus iterative bootstrap."
+---
+
+Multi-curve calibration solver with Levenberg-Marquardt, Gauss-Newton, and gradient descent algorithms, plus iterative bootstrap.
+
+All types are available via flat import:
+
+```bash
+from vade import Solver, SolverResult
+from vade.solver import bootstrap
+```
+
+See [Conventions](../conventions) for all accepted string parameter values.
+
+**Contents:**
+[SolverResult](#solverresult) | [Solver](#solver) | [bootstrap](#bootstrap)
+
+## SolverResult
+
+Calibration result with convergence diagnostics and Jacobian. _Rust-backed._
+
+Returned by [`Solver.iterate()`](#solver) -- not constructed directly.
+
+### Properties
+
+| Property           | Type            | Description                                                    |
+| ------------------ | --------------- | -------------------------------------------------------------- |
+| `.converged`       | `bool`          | Whether calibration converged                                  |
+| `.iterations`      | `int`           | Number of iterations performed                                 |
+| `.objective`       | `float`         | Final objective function value (sum of squared residuals)      |
+| `.residuals`       | `list[float]`   | Per-instrument residuals (target - computed)                   |
+| `.jacobian`        | `numpy.ndarray` | 2D Jacobian matrix, shape (n_instruments, n_vars)              |
+| `.condition_number`| `float`         | Condition number of the Jacobian                               |
+| `.status`          | `str`           | Status message describing termination reason                   |
+| `.time_seconds`    | `float`         | Calibration wall-clock time in seconds                         |
+| `.algorithm`       | `str`           | Algorithm used (e.g., `"levenberg_marquardt"`)                 |
+
+### Example
+
+```python
+import datetime
+from vade import IRS, DiscountCurve, Solver
+
+nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 1.0,
+    datetime.date(2026, 1, 1): 1.0,
+}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f", id="usd")
+
+irs_1y = IRS(effective=datetime.date(2024, 1, 1), termination="1Y", frequency="a", fixed_rate=3.0, convention="act365f", float_convention="act365f")
+irs_2y = IRS(effective=datetime.date(2024, 1, 1), termination="2Y", frequency="a", fixed_rate=3.5, convention="act365f", float_convention="act365f")
+
+solver = Solver(curves=[curve], instruments=[(irs_1y, 3.0), (irs_2y, 3.5)])
+result = solver.iterate()
+
+result.converged  # True
+result.iterations > 0  # True
+result.algorithm  # 'levenberg_marquardt'
+result.objective < 1e-10  # True
+len(result.residuals)  # 2
+result.jacobian.shape  # (2, 2)
+result.condition_number > 0  # True
+isinstance(result.time_seconds, float)  # True
+isinstance(result.status, str)  # True
+```
+
+## Solver
+
+Multi-curve calibration solver with selectable optimization algorithm. _Rust-backed._
+
+### Constructor
+
+```bash
+Solver(
+    *,
+    curves,
+    instruments,
+    weights=None,
+    func_tol=1e-14,
+    grad_tol=1e-14,
+    max_iter=100,
+    ini_lambda=None,
+    pre_solvers=None,
+    fx_rates=None,
+    algorithm="levenberg_marquardt",
+    learning_rate=None,
+)
+```
+
+### Parameters
+
+| Name            | Type                                          | Default                  | Description                                                                           |
+| --------------- | --------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------- |
+| `curves`        | `list[DiscountCurve \| LineCurve]`            | *required*               | Curves to calibrate (node values are adjusted)                                        |
+| `instruments`   | `list[tuple \| dict]`                         | *required*               | Calibration instruments with targets (see [Instruments Format](#instruments-format))  |
+| `weights`       | `list[float] \| None`                         | `None`                   | Per-instrument weights (uniform if None)                                              |
+| `func_tol`      | `float`                                       | `1e-14`                  | Function tolerance for convergence                                                    |
+| `grad_tol`      | `float`                                       | `1e-14`                  | Gradient tolerance for convergence                                                    |
+| `max_iter`      | `int`                                         | `100`                    | Maximum iterations                                                                    |
+| `ini_lambda`    | `tuple[float, float, float] \| None`          | `None`                   | LM damping parameters (initial, factor_up, factor_down)                               |
+| `pre_solvers`   | `list[Solver] \| None`                        | `None`                   | Solvers to run first (staged calibration for multi-curve frameworks)                  |
+| `fx_rates`      | `FXRates \| None`                             | `None`                   | FX rates for cross-currency calibration                                               |
+| `algorithm`     | `str`                                         | `"levenberg_marquardt"`  | Optimization algorithm: `"levenberg_marquardt"`, `"gauss_newton"`, `"gradient_descent"`|
+| `learning_rate` | `float \| None`                               | `None`                   | Learning rate for gradient descent (default 1.0 with Armijo backtracking)             |
+
+See [DiscountCurve](curves#discountcurve), [LineCurve](curves#linecurve) for curves. See [FXRates](fx#fxrates) for cross-currency calibration.
+
+### Methods
+
+| Method                        | Returns        | Description                                                           |
+| ----------------------------- | -------------- | --------------------------------------------------------------------- |
+| `.iterate()`                  | `SolverResult` | Run calibration, returns result with convergence info                 |
+| `.get_curve(index=0)`         | `Curve`        | Get calibrated curve by index                                         |
+| `.get_curve_by_id(curve_id)`  | `Curve`        | Get calibrated curve by its id string                                 |
+| `.delta(instrument, result)`  | `DataFrame`    | Bucket-level delta risk (columns: instrument_label, tenor, sensitivity, currency) |
+| `.gamma(instrument, result)`  | `DataFrame`    | Cross-gamma matrix as labeled DataFrame                               |
+| `.to_json()`                  | `str`          | Serialize solver state to JSON                                        |
+| `.from_json(s)` (classmethod) | `Solver`       | Deserialize from JSON                                                 |
+
+### Instruments Format
+
+The `instruments` parameter accepts three formats:
+
+**Simple 2-tuple** -- single-curve calibration:
+
+```bash
+instruments = [(irs_1y, 3.50), (irs_2y, 3.75), (irs_5y, 4.00)]
+```
+
+**Extended 5-tuple** -- multi-curve with labels (required for `.delta()` and `.gamma()`):
+
+```bash
+instruments = [
+    (irs_1y, 3.50, 0, "1Y_IRS", "USD"),
+    (irs_2y, 3.75, 0, "2Y_IRS", "USD"),
+]
+```
+
+Fields: `(instrument, target, curve_idx, label, currency)`.
+
+**Dict format** -- multi-curve with explicit disc/forecast curve indices:
+
+```bash
+instruments = [
+    {
+        "instrument": irs,
+        "target": 3.50,
+        "disc_curve_idx": 0,
+        "forecast_curve_idx": 1,
+        "label": "1Y",
+        "currency": "USD",
+    }
+]
+```
+
+Keys: `instrument` (required), `target` (required), `disc_curve_idx` (required), `forecast_curve_idx` (optional, defaults to disc_curve_idx), `label` (optional), `currency` (optional).
+
+The dict format also supports `leg2_disc_curve_idx` and `leg2_forecast_curve_idx` for cross-currency swaps with four curves.
+
+### Example
+
+```python
+import datetime
+from vade import IRS, DiscountCurve, Solver
+
+nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 1.0,
+    datetime.date(2026, 1, 1): 1.0,
+    datetime.date(2027, 1, 1): 1.0,
+}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f", id="usd")
+
+irs_1y = IRS(effective=datetime.date(2024, 1, 1), termination="1Y", frequency="a", fixed_rate=3.0, convention="act365f", float_convention="act365f")
+irs_2y = IRS(effective=datetime.date(2024, 1, 1), termination="2Y", frequency="a", fixed_rate=3.2, convention="act365f", float_convention="act365f")
+irs_3y = IRS(effective=datetime.date(2024, 1, 1), termination="3Y", frequency="a", fixed_rate=3.4, convention="act365f", float_convention="act365f")
+
+solver = Solver(curves=[curve], instruments=[(irs_1y, 3.0), (irs_2y, 3.2), (irs_3y, 3.4)])
+result = solver.iterate()
+result.converged  # True
+
+calibrated = solver.get_curve(0)
+df_1y = calibrated.discount_factor(datetime.date(2025, 1, 1))
+df_1y > 0.95  # True
+df_1y < 1.0  # True
+```
+
+## bootstrap
+
+Iterative bootstrap calibration using node-by-node Brent root-finding. Module-level function.
+
+```bash
+from vade.solver import bootstrap
+
+result = bootstrap(
+    curves,
+    instruments,
+    target_curve_idx,
+    tol=None,
+    max_outer=None,
+    max_brent=None,
+    bracket_low=None,
+    bracket_high=None,
+)
+```
+
+### Parameters
+
+| Name               | Type              | Default   | Description                                                    |
+| ------------------ | ----------------- | --------- | -------------------------------------------------------------- |
+| `curves`           | `list[Curve]`     | *required*| Curves to calibrate                                            |
+| `instruments`      | `list[dict]`      | *required*| Instruments in dict format (see keys below)                    |
+| `target_curve_idx` | `int`             | *required*| Index of curve to calibrate in curves list                     |
+| `tol`              | `float \| None`   | `None`    | Root-finding tolerance (default: 1e-12)                        |
+| `max_outer`        | `int \| None`     | `None`    | Maximum outer iterations for global interpolators (default: 10)|
+| `max_brent`        | `int \| None`     | `None`    | Maximum Brent iterations per node (default: 100)               |
+| `bracket_low`      | `float \| None`   | `None`    | Lower bracket for Brent search (default: -0.05)                |
+| `bracket_high`     | `float \| None`   | `None`    | Upper bracket for Brent search (default: 0.30)                 |
+
+The `instruments` list uses dict format with keys:
+
+| Key                  | Type    | Required | Description                                            |
+| -------------------- | ------- | -------- | ------------------------------------------------------ |
+| `instrument`         | object  | yes      | Instrument's inner Rust binding (e.g., `irs._inner`)   |
+| `target`             | `float` | yes      | Target rate to calibrate to                            |
+| `disc_curve_idx`     | `int`   | yes      | Index of discount curve in curves list                 |
+| `forecast_curve_idx` | `int`   | no       | Index of forecast curve (defaults to disc_curve_idx)   |
+| `label`              | `str`   | no       | Instrument label for diagnostics                       |
+
+**Returns:** calibrated curve (same type as `curves[target_curve_idx]`).
+
+**Note:** The number of instruments must equal the number of calibratable nodes on the target curve (all nodes except the anchor node at the curve's start date). Each instrument calibrates one node, ordered by maturity.
+
+**Note:** Unlike [`Solver`](#solver), bootstrap requires the instrument's internal Rust binding via `._inner`. The Solver wrapper handles this conversion automatically, but bootstrap operates at the lower level.
+
+### Example
+
+```bash
+import datetime
+from vade import IRS, DiscountCurve
+from vade.solver import bootstrap
+
+# One node per instrument (anchor node is fixed at 1.0)
+nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 1.0,
+    datetime.date(2026, 1, 1): 1.0,
+}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f", id="usd")
+
+irs_1y = IRS(effective=datetime.date(2024, 1, 1), termination="1Y", frequency="a",
+             fixed_rate=3.0, convention="act365f", float_convention="act365f")
+irs_2y = IRS(effective=datetime.date(2024, 1, 1), termination="2Y", frequency="a",
+             fixed_rate=3.5, convention="act365f", float_convention="act365f")
+
+instruments = [
+    {"instrument": irs_1y._inner, "target": 3.0, "disc_curve_idx": 0, "label": "1Y"},
+    {"instrument": irs_2y._inner, "target": 3.5, "disc_curve_idx": 0, "label": "2Y"},
+]
+
+calibrated = bootstrap(curves=[curve], instruments=instruments, target_curve_idx=0)
+calibrated.discount_factor(datetime.date(2025, 1, 1))  # ~0.97
+```
+
+For most calibration workflows, prefer [`Solver`](#solver) which provides richer diagnostics (convergence info, Jacobian, delta/gamma risk). Bootstrap is useful when you need node-by-node stripping with local interpolators (e.g., `"flat_forward"`).

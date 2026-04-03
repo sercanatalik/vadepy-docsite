@@ -1,0 +1,41 @@
+---
+title: "FX"
+description: "Vade's FX analytics cover spot rate triangulation, forward rate construction, cross-currency swaps, and non-deliverable instruments. Build consistent FX rate systems from a sparse set of market quotes, derive implied curves from FX forwards, and price instruments across currency pairs including restricted emerging market currencies."
+---
+
+Vade's FX analytics cover spot rate triangulation, forward rate construction, cross-currency swaps, and non-deliverable instruments. Build consistent FX rate systems from a sparse set of market quotes, derive implied curves from FX forwards, and price instruments across currency pairs including restricted emerging market currencies.
+
+---
+
+## What's Covered
+
+- **Spot rates** -- FXRates with automatic triangulation across any currency pair from a base set of quotes
+- **Forwards** -- FXForwards and FXForward for forward rate construction from interest rate differentials
+- **Cross-currency swaps** -- XCS pricing with dual-curve discounting and FX basis
+- **Non-deliverable instruments** -- NDF (non-deliverable forward), NDIRS (non-deliverable interest rate swap), NDXCS (non-deliverable cross-currency swap)
+- **Implied curves** -- FXImpliedCurve deriving discount factors from FX forwards and a reference curve
+
+## Key Concepts
+
+- **Spot rate** -- the exchange rate for immediate (T+2) settlement between two currencies
+- **Forward points** -- the difference between the FX forward rate and the spot rate, driven by interest rate differentials
+- **Cross rate** -- an exchange rate derived from two other rates via a common currency (e.g., EUR/JPY from EUR/USD and USD/JPY)
+- **Triangulation** -- the process of computing cross rates through an intermediate currency to maintain no-arbitrage consistency
+- **Covered interest parity** -- the relationship linking spot rates, forward rates, and interest rate differentials across currencies
+- **Non-deliverable forward** -- an FX forward settled in a convertible currency rather than the restricted currency, common for emerging markets (BRL, INR, KRW)
+- **Fixing** -- the official exchange rate published by a central bank or industry body, used for NDF settlement
+
+## Quick Taste
+
+```python
+fxr = FXRates(fx_rates={"eurusd": 1.08, "usdjpy": 149.50}, settlement=effective)
+cross = float(fxr.rate("eurjpy"))
+# Triangulated cross rate: EUR/JPY = EUR/USD * USD/JPY
+assert abs(cross - 1.08 * 149.50) < 0.01
+```
+
+## Guides
+
+- [FX Rates & Forwards](fx-rates-forwards) -- FX rate triangulation and forward construction
+- [Cross-Currency Swaps](cross-currency) -- Cross-currency swap pricing and risk
+- [Non-Deliverable Instruments](non-deliverable) -- NDF and non-deliverable swap pricing for restricted currencies

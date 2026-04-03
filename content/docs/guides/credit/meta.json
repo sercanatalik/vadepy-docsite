@@ -1,0 +1,11 @@
+{
+  "title": "Credit",
+  "pages": [
+    "index",
+    "bonds",
+    "callable-bonds",
+    "credit-curves-cds",
+    "fitted-curves",
+    "spread-analytics"
+  ]
+}

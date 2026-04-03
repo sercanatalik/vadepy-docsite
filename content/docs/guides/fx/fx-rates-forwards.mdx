@@ -1,0 +1,58 @@
+---
+title: "FX Rates & Forwards"
+description: "Set up multi-currency [FXRates](../../api/fx.md#fxrates) with graph-based"
+---
+
+Set up multi-currency [FXRates](../../api/fx#fxrates) with graph-based
+triangulation, compute forward exchange rates with [FXForwards](../../api/fx#fxforwards)
+from interest rate parity, and price tradeable [FXForward](../../api/instruments#fxforward)
+instruments against discount curves.
+
+---
+
+## FX Rates and Triangulation
+
+[FXRates](../../api/fx#fxrates) discovers all cross rates automatically from a
+sparse set of quoted pairs. Provide any connected set of currency pairs and
+query arbitrary crosses -- the triangulation engine finds the shortest path
+through the currency graph.
+
+```python
+float(fxr.rate("eurusd"))   # 1.08
+float(fxr.rate("eurgbp"))   # 0.8503937007874016
+float(fxr.rate("gbpjpy"))   # 189.865
+
+fxr.currencies               # ['eur', 'gbp', 'jpy', 'usd']
+
+float(fxr.convert(1_000_000, "eur", "usd"))  # 1080000.0
+```
+
+## FX Forwards
+
+[FXForwards](../../api/fx#fxforwards) computes forward exchange rates from
+interest rate parity. Given spot rates and discount curves for each currency,
+the forward rate reflects the interest rate differential over the delivery
+period. Forward points are the difference between the forward and spot rates.
+
+```python continuation
+float(fxf.rate("eurusd", datetime.date(2026, 6, 16), curves={"usd": usd_curve, "eur": eur_curve}))    # 1.0895470734849848
+float(fxf.points("eurusd", datetime.date(2026, 6, 16), curves={"usd": usd_curve, "eur": eur_curve}))  # 0.009547073484984736
+```
+
+## FX Forward Instrument
+
+An [FXForward](../../api/instruments#fxforward) is a tradeable instrument that
+locks in an exchange rate for a future delivery date. It prices against two
+discount curves (one per currency) and the spot FX rates.
+
+```python continuation
+fwd = FXForward(pair="eurusd", notional=1_000_000.0, delivery=datetime.date(2026, 6, 16))
+
+float(fwd.npv(usd_curve, eur_curve, fxr))   # 8487.043853479321
+float(fwd.rate(usd_curve, eur_curve, fxr))   # 1.0705365820213681
+```
+
+## Next Steps
+
+- [Cross-Currency Swaps](cross-currency) -- Cross-currency swap pricing and risk
+- [Non-Deliverable Instruments](non-deliverable) -- NDF and non-deliverable swap pricing for restricted currencies

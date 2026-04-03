@@ -1,0 +1,203 @@
+---
+title: "Market Context"
+description: "A `MarketContext` is an immutable container that bundles all pricing inputs"
+---
+
+A `MarketContext` is an immutable container that bundles all pricing inputs
+into a single object: evaluation date, named curves, historical fixings, FX
+rates, and business calendars. Instead of threading `curves=`, `fixings=`,
+and `fx=` through every pricing call, you pass a single `ctx=` argument.
+
+This simplifies multi-curve workflows, makes serialization straightforward
+(one JSON blob captures the entire pricing environment), and eliminates a
+common source of errors where curves and fixings get out of sync.
+
+For complete method signatures and parameter details, see the
+[API reference](../api/context).
+
+## Setup
+
+Build a realistic USD SOFR discount curve via Solver calibration:
+
+```python
+sofr_curve = DiscountCurve(
+    {
+        effective: 1.0,
+        datetime.date(2025, 7, 16): 1.0,
+        datetime.date(2025, 9, 16): 1.0,
+        datetime.date(2025, 12, 16): 1.0,
+        datetime.date(2026, 6, 16): 1.0,
+        datetime.date(2027, 6, 16): 1.0,
+        datetime.date(2028, 6, 16): 1.0,
+        datetime.date(2030, 6, 16): 1.0,
+        datetime.date(2035, 6, 16): 1.0,
+    },
+    interpolation="log_linear",
+    convention="act360",
+    id="sofr",
+)
+
+dep_1m = Deposit(effective=effective, termination="1m", rate=0.0, convention="act360")
+fra_3m = FRA(effective=effective, termination="3m", fixed_rate=0.0, convention="act360")
+fra_6m = FRA(effective=effective, termination="6m", fixed_rate=0.0, convention="act360")
+irs_1y = IRS(effective=effective, termination="1y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=effective, termination="3y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=effective, termination="5y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_10y = IRS(effective=effective, termination="10y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+
+instruments = [
+    (dep_1m, 0.0430),
+    (fra_3m, 0.0425),
+    (fra_6m, 0.0415),
+    (irs_1y, 4.00),
+    (irs_2y, 3.85),
+    (irs_3y, 3.75),
+    (irs_5y, 3.70),
+    (irs_10y, 3.85),
+]
+
+my_solver = Solver(curves=[sofr_curve], instruments=instruments)
+result = my_solver.iterate()
+assert result.converged
+sofr_curve = my_solver.get_curve(0)
+```
+
+## Creating a Context
+
+Create a `FixingStore` with historical SOFR fixings, then bundle everything
+into a `MarketContext`:
+
+```python continuation
+store = FixingStore()
+store.set("SOFR", {
+    datetime.date(2025, 6, 13): 0.0432,
+    datetime.date(2025, 6, 12): 0.0431,
+    datetime.date(2025, 6, 11): 0.0430,
+})
+
+ctx = MarketContext(
+    eval_date=effective,
+    curves={"sofr": sofr_curve},
+    fixings=store,
+)
+
+assert ctx.eval_date == effective
+assert "sofr" in ctx.curves
+assert ctx.fixings is store
+assert ctx.curve("sofr") is not None
+```
+
+## From Solver
+
+The production onramp is `MarketContext.from_solver()`. It extracts all
+curves from a calibrated Solver by their string IDs (set via the `id=`
+parameter on each curve). This is the recommended way to build a context
+after calibration:
+
+```python continuation
+ctx2 = MarketContext.from_solver(my_solver, eval_date=effective, fixings=store)
+
+# Curves are extracted by their id= parameter ("sofr" in this case)
+assert "sofr" in ctx2.curves
+retrieved = ctx2.curve("sofr")
+assert retrieved is not None
+```
+
+## Pricing with ctx=
+
+The key user benefit: pass `ctx=` instead of explicit `curves=`. The
+instrument resolves its curves from the context by `disc_curve_id`:
+
+```python continuation
+irs = IRS(
+    effective=effective,
+    termination="5y",
+    frequency="a",
+    fixed_rate=0.037,
+    convention="act360",
+    float_convention="act360",
+    disc_curve_id="sofr",
+)
+
+# Explicit curve passing
+npv_explicit = irs.npv(curves=sofr_curve)
+
+# Context-based pricing -- same result, cleaner API
+npv_ctx = irs.npv(ctx=ctx2)
+
+assert abs(float(npv_explicit) - float(npv_ctx)) < 1e-8
+```
+
+## Copy-on-Modify
+
+`MarketContext` is immutable. The `with_*` methods return new contexts,
+leaving the original unchanged:
+
+```python continuation
+ctx_bumped = ctx2.with_eval_date(datetime.date(2025, 7, 16))
+assert ctx2.eval_date == effective
+assert ctx_bumped.eval_date == datetime.date(2025, 7, 16)
+
+ctx_extra = ctx2.with_curve("eur_curve", sofr_curve)
+assert "eur_curve" in ctx_extra.curves
+assert "eur_curve" not in ctx2.curves
+```
+
+## Analytics
+
+Convenience query methods let you interrogate the context directly, without
+extracting individual curves:
+
+```python continuation
+# Discount factor 1 year out
+df = ctx2.discount_factor("sofr", datetime.date(2026, 6, 16))
+assert 0.9 < float(df) < 1.0
+
+# 6-month forward rate
+fwd = ctx2.forward_rate("sofr", datetime.date(2025, 12, 16), datetime.date(2026, 6, 16))
+assert 0.01 < float(fwd) < 0.08
+
+# 2-year zero rate
+zr = ctx2.zero_rate("sofr", effective, datetime.date(2027, 6, 16))
+assert 0.01 < float(zr) < 0.08
+```
+
+## Context Diffing
+
+Compare two contexts to see what changed. The `diff()` method returns a dict
+summarizing differences across all fields:
+
+```python continuation
+ctx_shifted = ctx2.with_curve("sofr", sofr_curve.shift(10))
+d = ctx_shifted.diff(ctx2)
+
+assert "eval_date" in d
+assert "curves" in d
+assert d["eval_date"]["changed"] is False
+assert "sofr" in d["curves"]["common"]
+```
+
+## Serialization Round-Trip
+
+Serialize a context to JSON and restore it. The restored context produces
+identical pricing results:
+
+```python continuation
+json_str = ctx2.to_json()
+assert isinstance(json_str, str)
+assert len(json_str) > 0
+
+ctx_restored = MarketContext.from_json(json_str)
+assert ctx_restored.eval_date == ctx2.eval_date
+assert "sofr" in ctx_restored.curves
+
+# Price the same IRS against the restored context
+npv_restored = irs.npv(ctx=ctx_restored)
+assert abs(float(npv_ctx) - float(npv_restored)) < 1e-8
+```
+
+## Next Steps
+
+- [API Reference](../api/context) -- Complete method signatures and parameter details
+- [Serialization](serialization) -- JSON round-trips for curves and instruments

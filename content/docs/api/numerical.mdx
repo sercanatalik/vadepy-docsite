@@ -1,0 +1,71 @@
+---
+title: "Numerical"
+description: "Root-finding solvers implemented in Rust for high performance. Both methods find x such that f(x) = 0."
+---
+
+Root-finding solvers implemented in Rust for high performance. Both methods find x such that f(x) = 0.
+
+## brent_solve
+
+Brent's method root finder. Combines bisection, secant, and inverse quadratic interpolation for robust convergence. Requires a bracketing interval where f(a) and f(b) have opposite signs.
+
+```bash
+result = brent_solve(f, a, b, tol=1e-12, max_iter=200)
+```
+
+| Name       | Type                       | Default  | Description                                            |
+| ---------- | -------------------------- | -------- | ------------------------------------------------------ |
+| `f`        | `Callable[[float], float]` | required | Function to find root of                               |
+| `a`        | `float`                    | required | Lower bracket (f(a) and f(b) must have opposite signs) |
+| `b`        | `float`                    | required | Upper bracket                                          |
+| `tol`      | `float`                    | `1e-12`  | Convergence tolerance                                  |
+| `max_iter` | `int`                      | `200`    | Maximum iterations                                     |
+
+**Returns:** `float` -- the root x where f(x) is approximately 0.
+
+**Raises:** `ValueError` if root is not bracketed (f(a) and f(b) have the same sign) or maximum iterations exceeded.
+
+### Example
+
+```python
+from vade import brent_solve
+
+# Find x where x^2 - 2 = 0 (i.e., sqrt(2))
+root = brent_solve(lambda x: x**2 - 2, 1.0, 2.0)
+print(round(root, 10))  # 1.4142135624
+```
+
+## newton_raphson_solve
+
+Newton-Raphson root finder. Uses the derivative for quadratic convergence. The callable must return both the function value and its derivative as a tuple.
+
+```bash
+result = newton_raphson_solve(f, x0, tol=1e-12, max_iter=200)
+```
+
+| Name       | Type                                     | Default  | Description                                  |
+| ---------- | ---------------------------------------- | -------- | -------------------------------------------- |
+| `f`        | `Callable[[float], Tuple[float, float]]` | required | Function returning (value, derivative) tuple |
+| `x0`       | `float`                                  | required | Initial guess                                |
+| `tol`      | `float`                                  | `1e-12`  | Convergence tolerance                        |
+| `max_iter` | `int`                                    | `200`    | Maximum iterations                           |
+
+**Returns:** `float` -- the root x where f(x) is approximately 0.
+
+**Raises:** `ValueError` if derivative is zero or maximum iterations exceeded.
+
+### Example
+
+```python
+from vade import newton_raphson_solve
+
+# Find x where x^2 - 2 = 0, providing f(x) and f'(x) = 2x
+root = newton_raphson_solve(lambda x: (x**2 - 2, 2 * x), 1.5)
+print(round(root, 10))  # 1.4142135624
+```
+
+## Choosing a Solver
+
+For functions where analytic derivatives are available, `newton_raphson_solve` typically converges faster (quadratic vs superlinear). For functions without easy derivatives, use `brent_solve` with a bracketing interval.
+
+See [Autodiff](autodiff) for automatic differentiation types that can compute derivatives for use with `newton_raphson_solve`.

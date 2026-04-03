@@ -1,0 +1,2210 @@
+---
+title: "Instruments"
+description: "Interest rate derivatives, bonds, credit, and FX instruments for pricing and calibration."
+---
+
+Interest rate derivatives, bonds, credit, and FX instruments for pricing and calibration.
+
+All types are available via flat import using short names:
+
+```bash
+from vade import IRS, FRA, ZCS, SBS, OIS, Deposit, IRFuture, CapFloor
+from vade import FixedRateBond, Bill, FloatRateNote
+from vade import ZeroCouponBond, StepUpBond, AmortizingBond, PIKBond
+from vade import CappedFloatRateNote, AssetSwap, CallableBond
+from vade import CDS, XCS, FXForward
+from vade import NDF, NDIRS, NDXCS
+```
+
+See [Conventions](../conventions) for all accepted string parameter values.
+
+**Contents:**
+
+**Interest Rate Derivatives:**
+[IRS](#irs) | [FRA](#fra) | [ZCS](#zcs) | [SBS](#sbs) | [OIS](#ois) | [Deposit](#deposit) | [IRFuture](#irfuture) | [CapFloor](#capfloor)
+
+**Bonds:**
+[FixedRateBond](#fixedratebond) | [Bill](#bill) | [FloatRateNote](#floatratenote) | [ZeroCouponBond](#zerocouponbond) | [StepUpBond](#stepupbond) | [AmortizingBond](#amortizingbond) | [PIKBond](#pikbond) | [CappedFloatRateNote](#cappedfloatratenote) | [AssetSwap](#assetswap) | [CallableBond](#callablebond)
+
+**Credit & FX:**
+[CDS](#cds) | [XCS](#xcs) | [FXForward](#fxforward)
+
+**Non-Deliverable Instruments:**
+[NDF](#ndf) | [NDIRS](#ndirs) | [NDXCS](#ndxcs)
+
+______________________________________________________________________
+
+## IRS
+
+Interest Rate Swap: fixed vs floating leg. _Python wrapper composing FixedLeg + FloatLeg._
+
+**Alias:** `IRS = InterestRateSwap`
+
+### Constructor
+
+```bash
+IRS(
+    *,
+    spec=None,
+    effective=None,
+    termination=None,
+    frequency="a",
+    fixed_rate=0.0,
+    notional=1_000_000.0,
+    convention="act360",
+    float_convention=None,
+    fixing_method="rfr_payment_delay",
+    spread=0.0,
+    calendar=None,
+    payment_lag=None,
+    currency="USD",
+    amortization=None,
+    fixed_amortization=None,
+    float_amortization=None,
+    modifier="mf",
+    stub="shortfront",
+    disc_curve_id=None,
+    forecast_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name                  | Type                       | Default                | Description                                                       |
+| --------------------- | -------------------------- | ---------------------- | ----------------------------------------------------------------- |
+| `spec`                | `str` or `None`            | `None`                 | Instrument spec name (overrides individual params)                |
+| `effective`           | `datetime.date` or `None`  | `None`                 | Start date of the swap                                            |
+| `termination`         | `date`, `str`, or `None`   | `None`                 | End date or tenor string (e.g., `"5Y"`)                           |
+| `frequency`           | `str`                      | `"a"`                  | Payment frequency for both legs                                   |
+| `fixed_rate`          | `float`                    | `0.0`                  | Fixed leg rate (percentage, e.g., `3.0` for 3%)                   |
+| `notional`            | `float`                    | `1_000_000.0`          | Notional amount                                                   |
+| `convention`          | `str`                      | `"act360"`             | Day count convention for the fixed leg                            |
+| `float_convention`    | `str` or `None`            | `None`                 | Day count convention for the float leg (defaults to `convention`) |
+| `fixing_method`       | `str`                      | `"rfr_payment_delay"`  | Rate fixing method                                                |
+| `spread`              | `float`                    | `0.0`                  | Spread on the floating leg (basis points)                         |
+| `calendar`            | `str` or `None`            | `None`                 | Named calendar (e.g., `"NYC"`, `"LDN"`)                          |
+| `payment_lag`         | `int` or `None`            | `None`                 | Payment lag in business days                                      |
+| `currency`            | `str`                      | `"USD"`                | Currency code                                                     |
+| `amortization`        | schedule or `None`         | `None`                 | Amortization schedule for both legs                               |
+| `fixed_amortization`  | schedule or `None`         | `None`                 | Amortization schedule for fixed leg only                          |
+| `float_amortization`  | schedule or `None`         | `None`                 | Amortization schedule for float leg only                          |
+| `modifier`            | `str`                      | `"mf"`                 | Business day adjustment rule                                      |
+| `stub`                | `str`                      | `"shortfront"`         | Stub period preference                                            |
+| `disc_curve_id`       | `str` or `None`            | `None`                 | Discount curve identifier for [Solver](solver#solver) lookup   |
+| `forecast_curve_id`   | `str` or `None`            | `None`                 | Forecast curve identifier for [Solver](solver#solver) lookup   |
+
+See [Conventions](../conventions) for accepted values for `frequency`, `convention`, `fixing_method`, `modifier`, and `stub`.
+
+### Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par rate against curves    |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+| `.spread(curves, *, solver=None)`         | `float`     | Par spread                 |
+
+The `curves` parameter accepts a [DiscountCurve](curves#discountcurve), [LineCurve](curves#linecurve), list, dict, or `None`. When using a [Solver](solver#solver), pass the solver and curves are resolved by `disc_curve_id`/`forecast_curve_id`.
+
+### Example
+
+```python
+import datetime
+from vade import IRS, DiscountCurve
+
+nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97, datetime.date(2026, 1, 1): 0.94}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+
+irs = IRS(
+    effective=datetime.date(2024, 1, 1),
+    termination="1Y",
+    frequency="a",
+    fixed_rate=3.0,
+    convention="act365f",
+)
+irs.npv(curve)  # 817.9264117309795
+irs.rate(curve)  # 3.084091921661261
+```
+
+______________________________________________________________________
+
+## FRA
+
+Forward Rate Agreement: single-period forward rate instrument. _Python wrapper composing a single FloatPeriod._
+
+**Alias:** `FRA = ForwardRateAgreement`
+
+### Constructor
+
+```bash
+FRA(
+    *,
+    spec=None,
+    effective=None,
+    termination=None,
+    notional=1_000_000.0,
+    fixed_rate=0.0,
+    convention="act360",
+    fixing_method="rfr_payment_delay",
+    calendar=None,
+    disc_curve_id=None,
+    forecast_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name                | Type                       | Default               | Description                                                     |
+| ------------------- | -------------------------- | --------------------- | --------------------------------------------------------------- |
+| `spec`              | `str` or `None`            | `None`                | Instrument spec name                                            |
+| `effective`         | `datetime.date` or `None`  | `None`                | Start date                                                      |
+| `termination`       | `date`, `str`, or `None`   | `None`                | End date or tenor string (e.g., `"6M"`)                         |
+| `notional`          | `float`                    | `1_000_000.0`         | Notional amount                                                 |
+| `fixed_rate`        | `float`                    | `0.0`                 | Fixed rate (percentage)                                         |
+| `convention`        | `str`                      | `"act360"`            | Day count convention                                            |
+| `fixing_method`     | `str`                      | `"rfr_payment_delay"` | Rate fixing method                                              |
+| `calendar`          | `str` or `None`            | `None`                | Named calendar                                                  |
+| `disc_curve_id`     | `str` or `None`            | `None`                | Discount curve identifier for [Solver](solver#solver) lookup |
+| `forecast_curve_id` | `str` or `None`            | `None`                | Forecast curve identifier for [Solver](solver#solver) lookup |
+
+See [Conventions](../conventions) for accepted values for `convention` and `fixing_method`.
+
+### Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par rate against curves    |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+| `.spread(curves, *, solver=None)`         | `float`     | Par spread                 |
+
+### Example
+
+```python
+import datetime
+from vade import FRA, DiscountCurve
+
+nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2024, 7, 1): 0.985, datetime.date(2025, 1, 1): 0.97}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act360")
+
+fra = FRA(
+    effective=datetime.date(2024, 3, 1),
+    termination="6M",
+    fixed_rate=3.5,
+    convention="act360",
+)
+fra.rate(curve)  # forward rate implied by the curve
+fra.npv(curve)  # NPV of the FRA position
+```
+
+______________________________________________________________________
+
+## ZCS
+
+Zero Coupon Swap: zero-coupon fixed vs floating leg. _Python wrapper composing ZeroFixedLeg + ZeroFloatLeg._
+
+**Alias:** `ZCS = ZeroCouponSwap`
+
+### Constructor
+
+```bash
+ZCS(
+    *,
+    spec=None,
+    effective=None,
+    termination=None,
+    fixed_rate=0.0,
+    notional=1_000_000.0,
+    convention="act360",
+    float_convention=None,
+    fixing_method="rfr_payment_delay",
+    spread=0.0,
+    calendar=None,
+    currency="USD",
+    disc_curve_id=None,
+    forecast_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name                | Type                       | Default               | Description                                                     |
+| ------------------- | -------------------------- | --------------------- | --------------------------------------------------------------- |
+| `spec`              | `str` or `None`            | `None`                | Instrument spec name                                            |
+| `effective`         | `datetime.date` or `None`  | `None`                | Start date                                                      |
+| `termination`       | `date`, `str`, or `None`   | `None`                | End date or tenor string                                        |
+| `fixed_rate`        | `float`                    | `0.0`                 | Fixed leg rate (percentage)                                     |
+| `notional`          | `float`                    | `1_000_000.0`         | Notional amount                                                 |
+| `convention`        | `str`                      | `"act360"`            | Day count convention for the fixed leg                          |
+| `float_convention`  | `str` or `None`            | `None`                | Day count convention for the float leg                          |
+| `fixing_method`     | `str`                      | `"rfr_payment_delay"` | Rate fixing method                                              |
+| `spread`            | `float`                    | `0.0`                 | Spread on the floating leg (basis points)                       |
+| `calendar`          | `str` or `None`            | `None`                | Named calendar                                                  |
+| `currency`          | `str`                      | `"USD"`               | Currency code                                                   |
+| `disc_curve_id`     | `str` or `None`            | `None`                | Discount curve identifier for [Solver](solver#solver) lookup |
+| `forecast_curve_id` | `str` or `None`            | `None`                | Forecast curve identifier for [Solver](solver#solver) lookup |
+
+See [Conventions](../conventions) for accepted values for `convention` and `fixing_method`.
+
+### Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par rate against curves    |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+| `.spread(curves, *, solver=None)`         | `float`     | Par spread                 |
+
+### Example
+
+```python
+import datetime
+from vade import ZCS, DiscountCurve
+
+nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97, datetime.date(2026, 1, 1): 0.94}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+
+zcs = ZCS(
+    effective=datetime.date(2024, 1, 1),
+    termination="2Y",
+    fixed_rate=3.0,
+    convention="act365f",
+)
+zcs.rate(curve)  # par zero-coupon rate
+zcs.npv(curve)  # NPV of the ZCS position
+```
+
+______________________________________________________________________
+
+## SBS
+
+Single Basis Swap: two floating legs with different frequencies. _Python wrapper composing two FloatLegs._
+
+**Alias:** `SBS = SingleBasisSwap`
+
+### Constructor
+
+```bash
+SBS(
+    *,
+    spec=None,
+    effective=None,
+    termination=None,
+    frequency="q",
+    leg2_frequency="s",
+    notional=1_000_000.0,
+    spread=0.0,
+    convention="act360",
+    leg2_convention=None,
+    fixing_method="rfr_payment_delay",
+    leg2_fixing_method=None,
+    calendar=None,
+    payment_lag=None,
+    currency="USD",
+    modifier="mf",
+    stub="shortfront",
+    disc_curve_id=None,
+    forecast_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name                  | Type                       | Default               | Description                                                     |
+| --------------------- | -------------------------- | --------------------- | --------------------------------------------------------------- |
+| `spec`                | `str` or `None`            | `None`                | Instrument spec name                                            |
+| `effective`           | `datetime.date` or `None`  | `None`                | Start date                                                      |
+| `termination`         | `date`, `str`, or `None`   | `None`                | End date or tenor string                                        |
+| `frequency`           | `str`                      | `"q"`                 | Leg 1 payment frequency                                         |
+| `leg2_frequency`      | `str`                      | `"s"`                 | Leg 2 payment frequency                                         |
+| `notional`            | `float`                    | `1_000_000.0`         | Notional amount                                                 |
+| `spread`              | `float`                    | `0.0`                 | Spread on leg 1 (basis points)                                  |
+| `convention`          | `str`                      | `"act360"`            | Day count convention for leg 1                                  |
+| `leg2_convention`     | `str` or `None`            | `None`                | Day count convention for leg 2 (defaults to `convention`)       |
+| `fixing_method`       | `str`                      | `"rfr_payment_delay"` | Rate fixing method for leg 1                                    |
+| `leg2_fixing_method`  | `str` or `None`            | `None`                | Rate fixing method for leg 2 (defaults to `fixing_method`)      |
+| `calendar`            | `str` or `None`            | `None`                | Named calendar                                                  |
+| `payment_lag`         | `int` or `None`            | `None`                | Payment lag in business days                                    |
+| `currency`            | `str`                      | `"USD"`               | Currency code                                                   |
+| `modifier`            | `str`                      | `"mf"`                | Business day adjustment rule                                    |
+| `stub`                | `str`                      | `"shortfront"`        | Stub period preference                                          |
+| `disc_curve_id`       | `str` or `None`            | `None`                | Discount curve identifier for [Solver](solver#solver) lookup |
+| `forecast_curve_id`   | `str` or `None`            | `None`                | Forecast curve identifier for [Solver](solver#solver) lookup |
+
+See [Conventions](../conventions) for accepted values for `frequency`, `convention`, `fixing_method`, `modifier`, and `stub`.
+
+### Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par basis spread           |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+| `.spread(curves, *, solver=None)`         | `float`     | Par spread                 |
+
+### Example
+
+```python
+import datetime
+from vade import SBS, DiscountCurve
+
+nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97, datetime.date(2026, 1, 1): 0.94}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act360")
+
+sbs = SBS(
+    effective=datetime.date(2024, 1, 1),
+    termination="2Y",
+    frequency="q",
+    leg2_frequency="s",
+    convention="act360",
+)
+sbs.rate(curve)  # par basis spread between the two tenors
+sbs.npv(curve)  # NPV of the basis swap
+```
+
+______________________________________________________________________
+
+## OIS
+
+Overnight Indexed Swap: fixed vs RFR floating leg with compounding. _Python wrapper composing FixedLeg + FloatLeg with RFR compounding._
+
+**Alias:** `OIS = OvernightIndexedSwap`
+
+### Constructor
+
+```bash
+OIS(
+    *,
+    spec=None,
+    effective=None,
+    termination=None,
+    frequency="a",
+    fixed_rate=0.0,
+    notional=1_000_000.0,
+    convention="act360",
+    float_convention=None,
+    fixing_method="rfr_payment_delay",
+    spread=0.0,
+    calendar=None,
+    payment_lag=None,
+    currency="USD",
+    amortization=None,
+    fixed_amortization=None,
+    float_amortization=None,
+    compounding_method=None,
+    lockout=None,
+    lookback=None,
+    modifier="mf",
+    stub="shortfront",
+    disc_curve_id=None,
+    forecast_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name                  | Type                       | Default               | Description                                                     |
+| --------------------- | -------------------------- | --------------------- | --------------------------------------------------------------- |
+| `spec`                | `str` or `None`            | `None`                | Instrument spec name                                            |
+| `effective`           | `datetime.date` or `None`  | `None`                | Start date                                                      |
+| `termination`         | `date`, `str`, or `None`   | `None`                | End date or tenor string                                        |
+| `frequency`           | `str`                      | `"a"`                 | Payment frequency                                               |
+| `fixed_rate`          | `float`                    | `0.0`                 | Fixed leg rate (percentage)                                     |
+| `notional`            | `float`                    | `1_000_000.0`         | Notional amount                                                 |
+| `convention`          | `str`                      | `"act360"`            | Day count convention for the fixed leg                          |
+| `float_convention`    | `str` or `None`            | `None`                | Day count convention for the float leg                          |
+| `fixing_method`       | `str`                      | `"rfr_payment_delay"` | Rate fixing method                                              |
+| `spread`              | `float`                    | `0.0`                 | Spread on the floating leg (basis points)                       |
+| `calendar`            | `str` or `None`            | `None`                | Named calendar                                                  |
+| `payment_lag`         | `int` or `None`            | `None`                | Payment lag in business days                                    |
+| `currency`            | `str`                      | `"USD"`               | Currency code                                                   |
+| `amortization`        | schedule or `None`         | `None`                | Amortization schedule for both legs                             |
+| `fixed_amortization`  | schedule or `None`         | `None`                | Amortization schedule for fixed leg only                        |
+| `float_amortization`  | schedule or `None`         | `None`                | Amortization schedule for float leg only                        |
+| `compounding_method`  | `str` or `None`            | `None`                | RFR compounding method (e.g., `"rfr_obs_shift"`)                |
+| `lockout`             | `int` or `None`            | `None`                | Number of lockout days before period end                        |
+| `lookback`            | `int` or `None`            | `None`                | Number of lookback days for rate observation                    |
+| `modifier`            | `str`                      | `"mf"`                | Business day adjustment rule                                    |
+| `stub`                | `str`                      | `"shortfront"`        | Stub period preference                                          |
+| `disc_curve_id`       | `str` or `None`            | `None`                | Discount curve identifier for [Solver](solver#solver) lookup |
+| `forecast_curve_id`   | `str` or `None`            | `None`                | Forecast curve identifier for [Solver](solver#solver) lookup |
+
+See [Conventions](../conventions) for accepted values for `frequency`, `convention`, `fixing_method`, `modifier`, and `stub`.
+
+### Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par rate against curves    |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+| `.spread(curves, *, solver=None)`         | `float`     | Par spread                 |
+
+### Example
+
+```python
+import datetime
+from vade import OIS, DiscountCurve
+
+nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97, datetime.date(2026, 1, 1): 0.94}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+
+ois = OIS(
+    effective=datetime.date(2024, 1, 1),
+    termination="1Y",
+    frequency="a",
+    fixed_rate=3.0,
+    convention="act365f",
+)
+ois.rate(curve)  # par OIS rate
+ois.npv(curve)  # NPV of the OIS position
+```
+
+______________________________________________________________________
+
+## Deposit
+
+Deposit instrument for short-end curve calibration. _Rust-backed._
+
+### Constructor
+
+```bash
+Deposit(
+    *,
+    effective=None,
+    termination=None,
+    rate=0.0,
+    notional=1_000_000.0,
+    convention="act360",
+    disc_curve_id=None,
+    forecast_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name                | Type                       | Default       | Description                                                     |
+| ------------------- | -------------------------- | ------------- | --------------------------------------------------------------- |
+| `effective`         | `datetime.date` or `None`  | `None`        | Start date                                                      |
+| `termination`       | `date`, `str`, or `None`   | `None`        | End date or tenor string (e.g., `"3M"`)                         |
+| `rate`              | `float`                    | `0.0`         | Deposit rate (percentage)                                       |
+| `notional`          | `float`                    | `1_000_000.0` | Notional amount                                                 |
+| `convention`        | `str`                      | `"act360"`    | Day count convention                                            |
+| `disc_curve_id`     | `str` or `None`            | `None`        | Discount curve identifier for [Solver](solver#solver) lookup |
+| `forecast_curve_id` | `str` or `None`            | `None`        | Forecast curve identifier for [Solver](solver#solver) lookup |
+
+See [Conventions](../conventions) for accepted values for `convention`.
+
+### Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par rate against curves    |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+| `.spread(curves, *, solver=None)`         | `float`     | Par spread                 |
+
+### Example
+
+```python
+import datetime
+from vade import Deposit, DiscountCurve
+
+nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2024, 4, 1): 0.9925, datetime.date(2024, 7, 1): 0.985}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act360")
+
+dep = Deposit(
+    effective=datetime.date(2024, 1, 1),
+    termination="3M",
+    rate=3.0,
+    convention="act360",
+)
+dep.rate(curve)  # par deposit rate implied by the curve
+dep.npv(curve)  # NPV of the deposit
+```
+
+______________________________________________________________________
+
+## IRFuture
+
+STIR Futures instrument with convexity adjustment. _Rust-backed._
+
+### Constructor
+
+```bash
+IRFuture(
+    *,
+    effective=None,
+    termination=None,
+    price=100.0,
+    notional=1_000_000.0,
+    convexity_adjustment=0.0,
+    convention="act360",
+    quote_convention="price",
+    sigma=None,
+    tick_size=None,
+    notional_multiplier=None,
+    contract_size=None,
+    disc_curve_id=None,
+    forecast_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name                    | Type                       | Default       | Description                                                     |
+| ----------------------- | -------------------------- | ------------- | --------------------------------------------------------------- |
+| `effective`             | `datetime.date` or `None`  | `None`        | Contract start date                                             |
+| `termination`           | `date`, `str`, or `None`   | `None`        | Contract end date or tenor string                               |
+| `price`                 | `float`                    | `100.0`       | Futures price (e.g., `96.5` implies ~3.5% rate)                 |
+| `notional`              | `float`                    | `1_000_000.0` | Notional amount                                                 |
+| `convexity_adjustment`  | `float`                    | `0.0`         | Convexity adjustment in basis points                            |
+| `convention`            | `str`                      | `"act360"`    | Day count convention                                            |
+| `quote_convention`      | `str`                      | `"price"`     | Quote convention (`"price"` or `"rate"`)                        |
+| `sigma`                 | `float` or `None`          | `None`        | Volatility for automatic convexity calculation                  |
+| `tick_size`             | `float` or `None`          | `None`        | Minimum price increment                                         |
+| `notional_multiplier`   | `float` or `None`          | `None`        | Notional multiplier per tick                                    |
+| `contract_size`         | `float` or `None`          | `None`        | Contract size                                                   |
+| `disc_curve_id`         | `str` or `None`            | `None`        | Discount curve identifier for [Solver](solver#solver) lookup |
+| `forecast_curve_id`     | `str` or `None`            | `None`        | Forecast curve identifier for [Solver](solver#solver) lookup |
+
+See [Conventions](../conventions) for accepted values for `convention`.
+
+### Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Implied forward rate       |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+| `.spread(curves, *, solver=None)`         | `float`     | Par spread                 |
+
+### Example
+
+```python
+import datetime
+from vade import IRFuture, DiscountCurve
+
+nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2024, 7, 1): 0.985, datetime.date(2025, 1, 1): 0.97}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act360")
+
+irf = IRFuture(
+    effective=datetime.date(2024, 6, 1),
+    termination="3M",
+    price=96.5,
+    convention="act360",
+)
+irf.rate(curve)  # implied forward rate from the curve
+irf.npv(curve)  # NPV based on price vs implied rate
+```
+
+______________________________________________________________________
+
+## CapFloor
+
+Cap/Floor instrument with Black-76 or Bachelier pricing. _Python wrapper composing caplet/floorlet periods._
+
+### Constructor
+
+```bash
+CapFloor(
+    *,
+    effective=None,
+    termination=None,
+    strike=0.0,
+    vol=0.0,
+    notional=1_000_000.0,
+    frequency="q",
+    cap_floor_type="cap",
+    model="black76",
+    convention="act360",
+    currency="USD",
+)
+```
+
+### Parameters
+
+| Name              | Type                       | Default       | Description                                                |
+| ----------------- | -------------------------- | ------------- | ---------------------------------------------------------- |
+| `effective`       | `datetime.date` or `None`  | `None`        | Start date                                                 |
+| `termination`     | `date`, `str`, or `None`   | `None`        | End date or tenor string                                   |
+| `strike`          | `float`                    | `0.0`         | Strike rate (percentage)                                   |
+| `vol`             | `float`                    | `0.0`         | Volatility (decimal, e.g., `0.20` for 20%)                |
+| `notional`        | `float`                    | `1_000_000.0` | Notional amount                                            |
+| `frequency`       | `str`                      | `"q"`         | Caplet/floorlet frequency                                  |
+| `cap_floor_type`  | `str`                      | `"cap"`       | Type: `"cap"` or `"floor"`                                 |
+| `model`           | `str`                      | `"black76"`   | Pricing model: `"black76"` or `"bachelier"`                |
+| `convention`      | `str`                      | `"act360"`    | Day count convention                                       |
+| `currency`        | `str`                      | `"USD"`       | Currency code                                              |
+
+See [Conventions](../conventions) for accepted values for `frequency` and `convention`.
+
+### Methods
+
+| Method                                        | Returns     | Description                                    |
+| --------------------------------------------- | ----------- | ---------------------------------------------- |
+| `.npv(disc_curve, forecast_curve)`            | `float`     | Net present value using Black-76 or Bachelier  |
+| `.cashflows(disc_curve, forecast_curve)`       | `DataFrame` | Caplet/floorlet-level cashflow table           |
+
+Note: CapFloor does **not** have `.rate()` or `solver` keyword arguments. Both `disc_curve` and `forecast_curve` are required positional parameters.
+
+### Example
+
+```python
+import datetime
+from vade import CapFloor, DiscountCurve
+
+nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97, datetime.date(2026, 1, 1): 0.94}
+disc = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+forecast = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+
+cap = CapFloor(
+    effective=datetime.date(2024, 1, 1),
+    termination="1Y",
+    strike=3.0,
+    vol=0.20,
+    frequency="q",
+    cap_floor_type="cap",
+    model="black76",
+    convention="act360",
+)
+cap.npv(disc, forecast)  # NPV of the interest rate cap
+```
+
+______________________________________________________________________
+
+## FixedRateBond
+
+Fixed Rate Bond with full analytics suite. _Python wrapper composing FixedLeg with bond analytics._
+
+### Constructor
+
+```bash
+FixedRateBond(
+    *,
+    spec=None,
+    effective=None,
+    termination=None,
+    coupon=0.0,
+    frequency="s",
+    settlement_days=1,
+    ex_div_days=0,
+    calendar=None,
+    currency="USD",
+    convention="actactisda",
+    accrued_convention=None,
+    face_value=100.0,
+    modifier="none",
+    disc_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name                 | Type                       | Default        | Description                                                     |
+| -------------------- | -------------------------- | -------------- | --------------------------------------------------------------- |
+| `spec`               | `str` or `None`            | `None`         | Instrument spec name                                            |
+| `effective`          | `datetime.date` or `None`  | `None`         | Issue or settlement date                                        |
+| `termination`        | `date`, `str`, or `None`   | `None`         | Maturity date or tenor string                                   |
+| `coupon`             | `float`                    | `0.0`          | Coupon rate (percentage, e.g., `5.0` for 5%)                    |
+| `frequency`          | `str`                      | `"s"`          | Coupon payment frequency                                        |
+| `settlement_days`    | `int`                      | `1`            | Settlement lag in business days                                 |
+| `ex_div_days`        | `int`                      | `0`            | Ex-dividend days before coupon payment                          |
+| `calendar`           | `str` or `None`            | `None`         | Named calendar                                                  |
+| `currency`           | `str`                      | `"USD"`        | Currency code                                                   |
+| `convention`         | `str`                      | `"actactisda"` | Day count convention for coupon accrual                         |
+| `accrued_convention` | `str` or `None`            | `None`         | Separate day count for accrued interest (defaults to `convention`) |
+| `face_value`         | `float`                    | `100.0`        | Face value of the bond                                          |
+| `modifier`           | `str`                      | `"none"`       | Business day adjustment rule                                    |
+| `disc_curve_id`      | `str` or `None`            | `None`         | Discount curve identifier for [Solver](solver#solver) lookup |
+
+See [Conventions](../conventions) for accepted values for `frequency`, `convention`, and `modifier`.
+
+### Methods
+
+#### Standard Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par rate against curves    |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+| `.spread(curves, *, solver=None)`         | `float`     | Par spread                 |
+
+#### Price and Yield
+
+| Method                                                             | Returns | Description                             |
+| ------------------------------------------------------------------ | ------- | --------------------------------------- |
+| `.price(curves, *, solver=None, settlement=None)`                  | `float` | Clean price                             |
+| `.dirty_price(curves, *, solver=None, settlement=None)`            | `float` | Dirty price (clean + accrued)           |
+| `.accrued_interest(settlement)`                                    | `float` | Accrued interest at settlement date     |
+| `.ytm(clean_price, settlement, convention="periodic")`             | `float` | Yield to maturity from clean price      |
+| `.price_from_ytm(ytm, settlement, convention="periodic")`          | `float` | Clean price from yield to maturity      |
+
+YTM `convention` accepts `"periodic"`, `"annual"`, `"semi_annual"`, or `"continuous"`.
+
+#### Risk Analytics
+
+| Method                                                                                  | Returns | Description                     |
+| --------------------------------------------------------------------------------------- | ------- | ------------------------------- |
+| `.duration(curves, *, solver=None, metric="modified", settlement=None)`                 | `float` | Modified or Macaulay duration   |
+| `.convexity(curves, *, solver=None, settlement=None)`                                   | `float` | Price convexity                 |
+| `.dv01(curves, *, solver=None)`                                                         | `float` | Dollar value of 1bp             |
+| `.z_spread(curves, *, solver=None, price=None, settlement=None)`                        | `float` | Z-spread over curve             |
+| `.asw_spread(curves, *, solver=None, price=None, method="par_par", settlement=None)`    | `float` | Asset swap spread               |
+| `.cs01(curves, *, solver=None)`                                                         | `float` | Credit spread sensitivity (1bp) |
+| `.price_yield_sensitivity(curves, *, solver=None)`                                      | `float` | Price-yield sensitivity         |
+| `.analytic_delta(curves, *, solver=None)`                                               | `float` | Analytic delta                  |
+
+Duration `metric` accepts `"modified"` or `"macaulay"`. ASW `method` accepts `"par_par"` or `"proceeds"`.
+
+### Example
+
+```python
+import datetime
+from vade import FixedRateBond, DiscountCurve
+
+nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.97,
+    datetime.date(2026, 1, 1): 0.94,
+    datetime.date(2027, 1, 1): 0.91,
+}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+
+bond = FixedRateBond(
+    effective=datetime.date(2024, 1, 1),
+    termination="2Y",
+    coupon=5.0,
+    frequency="s",
+    convention="actactisda",
+)
+bond.npv(curve)  # net present value
+bond.price(curve, settlement=datetime.date(2024, 1, 2))  # clean price
+bond.dirty_price(curve, settlement=datetime.date(2024, 1, 2))  # dirty price
+bond.accrued_interest(datetime.date(2024, 3, 1))  # accrued at settlement
+bond.ytm(99.5, datetime.date(2024, 1, 2))  # yield to maturity
+bond.duration(curve, metric="modified", settlement=datetime.date(2024, 1, 2))  # modified duration
+```
+
+______________________________________________________________________
+
+## Bill
+
+Zero-coupon bill (Treasury bill). _Python wrapper composing zero-coupon cashflow with bill analytics._
+
+### Constructor
+
+```bash
+Bill(
+    *,
+    spec=None,
+    effective=None,
+    termination=None,
+    settlement_days=1,
+    calendar=None,
+    currency="USD",
+    convention="act360",
+    face_value=100.0,
+    disc_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name              | Type                       | Default    | Description                                                     |
+| ----------------- | -------------------------- | ---------- | --------------------------------------------------------------- |
+| `spec`            | `str` or `None`            | `None`     | Instrument spec name                                            |
+| `effective`       | `datetime.date` or `None`  | `None`     | Issue date                                                      |
+| `termination`     | `date`, `str`, or `None`   | `None`     | Maturity date or tenor string (e.g., `"6M"`)                    |
+| `settlement_days` | `int`                      | `1`        | Settlement lag in business days                                 |
+| `calendar`        | `str` or `None`            | `None`     | Named calendar                                                  |
+| `currency`        | `str`                      | `"USD"`    | Currency code                                                   |
+| `convention`      | `str`                      | `"act360"` | Day count convention                                            |
+| `face_value`      | `float`                    | `100.0`    | Face value                                                      |
+| `disc_curve_id`   | `str` or `None`            | `None`     | Discount curve identifier for [Solver](solver#solver) lookup |
+
+See [Conventions](../conventions) for accepted values for `convention`.
+
+### Methods
+
+| Method                                              | Returns     | Description                     |
+| --------------------------------------------------- | ----------- | ------------------------------- |
+| `.rate(curves, *, solver=None)`                     | `float`     | Par rate against curves         |
+| `.npv(curves, *, solver=None)`                      | `float`     | Net present value               |
+| `.cashflows(curves, *, solver=None)`                | `DataFrame` | Period-level cashflow table     |
+| `.price(curves, *, solver=None)`                    | `float`     | Bill price                      |
+| `.dirty_price(curves, *, solver=None)`              | `float`     | Dirty price                     |
+| `.ytm(clean_price, settlement)`                     | `float`     | Yield to maturity from price    |
+
+### Example
+
+```python
+import datetime
+from vade import Bill, DiscountCurve
+
+nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2024, 7, 1): 0.985, datetime.date(2025, 1, 1): 0.97}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act360")
+
+bill = Bill(
+    effective=datetime.date(2024, 1, 1),
+    termination="6M",
+    convention="act360",
+)
+bill.rate(curve)  # implied discount rate
+bill.price(curve)  # bill price
+bill.ytm(99.0, datetime.date(2024, 1, 2))  # yield from price
+```
+
+______________________________________________________________________
+
+## FloatRateNote
+
+Floating Rate Note (FRN). _Python wrapper composing FloatLeg with FRN analytics._
+
+### Constructor
+
+```bash
+FloatRateNote(
+    *,
+    spec=None,
+    effective=None,
+    termination=None,
+    spread=0.0,
+    frequency="q",
+    settlement_days=2,
+    ex_div_days=0,
+    calendar=None,
+    currency="USD",
+    convention="act360",
+    accrued_convention=None,
+    face_value=100.0,
+    modifier="mf",
+    disc_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name                 | Type                       | Default    | Description                                                        |
+| -------------------- | -------------------------- | ---------- | ------------------------------------------------------------------ |
+| `spec`               | `str` or `None`            | `None`     | Instrument spec name                                               |
+| `effective`          | `datetime.date` or `None`  | `None`     | Issue date                                                         |
+| `termination`        | `date`, `str`, or `None`   | `None`     | Maturity date or tenor string                                      |
+| `spread`             | `float`                    | `0.0`      | Spread over floating rate (basis points)                           |
+| `frequency`          | `str`                      | `"q"`      | Coupon payment frequency                                           |
+| `settlement_days`    | `int`                      | `2`        | Settlement lag in business days                                    |
+| `ex_div_days`        | `int`                      | `0`        | Ex-dividend days before coupon payment                             |
+| `calendar`           | `str` or `None`            | `None`     | Named calendar                                                     |
+| `currency`           | `str`                      | `"USD"`    | Currency code                                                      |
+| `convention`         | `str`                      | `"act360"` | Day count convention                                               |
+| `accrued_convention` | `str` or `None`            | `None`     | Separate day count for accrued interest (defaults to `convention`) |
+| `face_value`         | `float`                    | `100.0`    | Face value                                                         |
+| `modifier`           | `str`                      | `"mf"`     | Business day adjustment rule                                       |
+| `disc_curve_id`      | `str` or `None`            | `None`     | Discount curve identifier for [Solver](solver#solver) lookup    |
+
+See [Conventions](../conventions) for accepted values for `frequency`, `convention`, and `modifier`.
+
+### Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par rate against curves    |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+| `.price(curves, *, solver=None)`          | `float`     | Clean price                |
+| `.dirty_price(curves, *, solver=None)`    | `float`     | Dirty price                |
+| `.analytic_delta(curves, *, solver=None)` | `float`     | Analytic delta             |
+
+### Example
+
+```python
+import datetime
+from vade import FloatRateNote, DiscountCurve
+
+nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97, datetime.date(2026, 1, 1): 0.94}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act360")
+
+frn = FloatRateNote(
+    effective=datetime.date(2024, 1, 1),
+    termination="1Y",
+    frequency="q",
+    spread=50.0,
+    convention="act360",
+)
+frn.rate(curve)  # par spread
+frn.npv(curve)  # net present value
+frn.price(curve)  # clean price
+```
+
+______________________________________________________________________
+
+## ZeroCouponBond
+
+Zero-coupon bond with OID (Original Issue Discount) accrued interest. _Python wrapper composing zero-coupon cashflow with compound discounting._
+
+Accrued interest uses the OID compound method: at any settlement date, accrued equals the amortized cost (issue price compounded at yield) minus the issue price, prorated within each semi-annual period.
+
+### Constructor
+
+```bash
+ZeroCouponBond(
+    *,
+    effective=None,
+    termination=None,
+    issue_price=100.0,
+    frequency="s",
+    settlement_days=1,
+    calendar=None,
+    currency="USD",
+    convention="actactisda",
+    face_value=100.0,
+    disc_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name              | Type                       | Default        | Description                                                     |
+| ----------------- | -------------------------- | -------------- | --------------------------------------------------------------- |
+| `effective`       | `datetime.date` or `None`  | `None`         | Issue date                                                      |
+| `termination`     | `date`, `str`, or `None`   | `None`         | Maturity date or tenor string                                   |
+| `issue_price`     | `float`                    | `100.0`        | Original issue price (OID basis for accrued calculation)        |
+| `frequency`       | `str`                      | `"s"`          | Accrual frequency for OID calculation                           |
+| `settlement_days` | `int`                      | `1`            | Settlement lag in business days                                 |
+| `calendar`        | `str` or `None`            | `None`         | Named calendar                                                  |
+| `currency`        | `str`                      | `"USD"`        | Currency code                                                   |
+| `convention`      | `str`                      | `"actactisda"` | Day count convention                                            |
+| `face_value`      | `float`                    | `100.0`        | Face value at maturity                                          |
+| `disc_curve_id`   | `str` or `None`            | `None`         | Discount curve identifier for [Solver](solver#solver) lookup |
+
+See [Conventions](../conventions) for accepted values for `frequency` and `convention`.
+
+### Methods
+
+#### Standard Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par rate against curves    |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+
+#### Price and Yield
+
+| Method                                                             | Returns | Description                             |
+| ------------------------------------------------------------------ | ------- | --------------------------------------- |
+| `.price(curves, *, solver=None, settlement=None)`                  | `float` | Clean price                             |
+| `.dirty_price(curves, *, solver=None, settlement=None)`            | `float` | Dirty price (clean + OID accrued)       |
+| `.accrued_interest(settlement)`                                    | `float` | OID accrued interest at settlement date |
+| `.ytm(clean_price, settlement, convention="periodic")`             | `float` | Yield to maturity from clean price      |
+| `.price_from_ytm(ytm, settlement, convention="periodic")`          | `float` | Clean price from yield to maturity      |
+
+#### Risk Analytics
+
+| Method                                                                                  | Returns | Description                   |
+| --------------------------------------------------------------------------------------- | ------- | ----------------------------- |
+| `.duration(curves, *, solver=None, metric="modified", settlement=None)`                 | `float` | Modified or Macaulay duration |
+| `.convexity(curves, *, solver=None, settlement=None)`                                   | `float` | Price convexity               |
+| `.z_spread(curves, *, solver=None, price=None, settlement=None)`                        | `float` | Z-spread over curve           |
+
+### Example
+
+```python
+import math
+import datetime
+from vade import ZeroCouponBond, DiscountCurve
+
+# Flat 4% continuously compounded curve
+base = datetime.date(2024, 1, 1)
+nodes = {base: 1.0}
+for y in range(1, 11):
+    nodes[datetime.date(2024 + y, 1, 1)] = math.exp(-0.04 * y)
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+
+zcb = ZeroCouponBond(
+    effective=datetime.date(2024, 1, 1),
+    termination=datetime.date(2029, 1, 1),
+    issue_price=80.0,
+    face_value=100.0,
+    frequency="s",
+    convention="actactisda",
+)
+settlement = datetime.date(2024, 1, 2)
+
+price = zcb.price(curve, settlement=settlement)
+assert 50.0 < price < 80.0  # deep discount zero-coupon bond
+
+accrued = zcb.accrued_interest(settlement)
+assert accrued >= 0.0  # OID accrued is non-negative
+
+ytm = zcb.ytm(float(price), settlement)
+assert 0.03 < ytm < 0.06  # yield in reasonable range
+
+dur = zcb.duration(curve, metric="modified", settlement=settlement)
+assert dur > 4.0  # near maturity duration for 5Y zero
+```
+
+______________________________________________________________________
+
+## StepUpBond
+
+Fixed-rate bond with coupon rates that change at specified dates. _Python wrapper composing FixedLeg with dated rate resolution._
+
+The `coupon_rates` parameter replaces the single `coupon` used by FixedRateBond, allowing step-up (or step-down) coupon schedules where the rate changes at predefined dates.
+
+### Constructor
+
+```bash
+StepUpBond(
+    *,
+    effective=None,
+    termination=None,
+    coupon_rates=None,
+    frequency="s",
+    settlement_days=1,
+    ex_div_days=0,
+    calendar=None,
+    currency="USD",
+    convention="actactisda",
+    accrued_convention=None,
+    face_value=100.0,
+    modifier="none",
+    disc_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name                 | Type                               | Default        | Description                                                        |
+| -------------------- | ---------------------------------- | -------------- | ------------------------------------------------------------------ |
+| `effective`          | `datetime.date` or `None`          | `None`         | Issue date                                                         |
+| `termination`        | `date`, `str`, or `None`           | `None`         | Maturity date or tenor string                                      |
+| `coupon_rates`       | `list[tuple[date, float]]` or `None` | `None`       | Dated coupon rate schedule as `[(date, rate), ...]`                 |
+| `frequency`          | `str`                              | `"s"`          | Coupon payment frequency                                           |
+| `settlement_days`    | `int`                              | `1`            | Settlement lag in business days                                    |
+| `ex_div_days`        | `int`                              | `0`            | Ex-dividend days before coupon payment                             |
+| `calendar`           | `str` or `None`                    | `None`         | Named calendar                                                     |
+| `currency`           | `str`                              | `"USD"`        | Currency code                                                      |
+| `convention`         | `str`                              | `"actactisda"` | Day count convention for coupon accrual                            |
+| `accrued_convention` | `str` or `None`                    | `None`         | Separate day count for accrued interest (defaults to `convention`) |
+| `face_value`         | `float`                            | `100.0`        | Face value of the bond                                             |
+| `modifier`           | `str`                              | `"none"`       | Business day adjustment rule                                       |
+| `disc_curve_id`      | `str` or `None`                    | `None`         | Discount curve identifier for [Solver](solver#solver) lookup    |
+
+See [Conventions](../conventions) for accepted values for `frequency`, `convention`, and `modifier`.
+
+### Methods
+
+#### Standard Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par rate against curves    |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+| `.spread(curves, *, solver=None)`         | `float`     | Par spread                 |
+
+#### Price and Yield
+
+| Method                                                             | Returns | Description                             |
+| ------------------------------------------------------------------ | ------- | --------------------------------------- |
+| `.price(curves, *, solver=None, settlement=None)`                  | `float` | Clean price                             |
+| `.dirty_price(curves, *, solver=None, settlement=None)`            | `float` | Dirty price (clean + accrued)           |
+| `.accrued_interest(settlement)`                                    | `float` | Accrued interest at settlement date     |
+| `.ytm(clean_price, settlement, convention="periodic")`             | `float` | Yield to maturity from clean price      |
+| `.price_from_ytm(ytm, settlement, convention="periodic")`          | `float` | Clean price from yield to maturity      |
+
+#### Risk Analytics
+
+| Method                                                                                  | Returns | Description                     |
+| --------------------------------------------------------------------------------------- | ------- | ------------------------------- |
+| `.duration(curves, *, solver=None, metric="modified", settlement=None)`                 | `float` | Modified or Macaulay duration   |
+| `.convexity(curves, *, solver=None, settlement=None)`                                   | `float` | Price convexity                 |
+| `.dv01(curves, *, solver=None)`                                                         | `float` | Dollar value of 1bp             |
+| `.z_spread(curves, *, solver=None, price=None, settlement=None)`                        | `float` | Z-spread over curve             |
+| `.asw_spread(curves, *, solver=None, price=None, method="par_par", settlement=None)`    | `float` | Asset swap spread               |
+| `.analytic_delta(curves, *, solver=None)`                                               | `float` | Analytic delta                  |
+
+### Example
+
+```python
+import math
+import datetime
+from vade import StepUpBond, DiscountCurve
+
+# Flat 4% continuously compounded curve
+base = datetime.date(2024, 1, 1)
+nodes = {base: 1.0}
+for y in range(1, 11):
+    nodes[datetime.date(2024 + y, 1, 1)] = math.exp(-0.04 * y)
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+
+bond = StepUpBond(
+    effective=datetime.date(2024, 1, 1),
+    termination=datetime.date(2029, 1, 1),
+    coupon_rates=[
+        (datetime.date(2024, 1, 1), 0.03),   # 3% for first 3 years
+        (datetime.date(2027, 1, 1), 0.05),   # steps up to 5%
+    ],
+    frequency="s",
+    face_value=100.0,
+    convention="actactisda",
+)
+settlement = datetime.date(2024, 1, 2)
+
+price = bond.price(curve, settlement=settlement)
+assert 90.0 < price < 110.0  # near par
+
+ytm = bond.ytm(float(price), settlement)
+assert 0.03 < ytm < 0.06  # yield between step-up rates
+
+dur = bond.duration(curve, metric="modified", settlement=settlement)
+assert 3.0 < dur < 5.5  # reasonable duration for 5Y bond
+```
+
+______________________________________________________________________
+
+## AmortizingBond
+
+Fixed-rate bond with declining notional via scheduled principal repayments. _Python wrapper composing FixedLeg with amortization schedule._
+
+Principal repayment amounts are specified as absolute values. Coupon payments are computed on the remaining (reduced) notional after each principal repayment.
+
+### Constructor
+
+```bash
+AmortizingBond(
+    *,
+    effective=None,
+    termination=None,
+    coupon=0.0,
+    amortization_schedule=None,
+    frequency="s",
+    settlement_days=1,
+    ex_div_days=0,
+    calendar=None,
+    currency="USD",
+    convention="actactisda",
+    accrued_convention=None,
+    face_value=100.0,
+    modifier="none",
+    disc_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name                    | Type                                  | Default        | Description                                                        |
+| ----------------------- | ------------------------------------- | -------------- | ------------------------------------------------------------------ |
+| `effective`             | `datetime.date` or `None`             | `None`         | Issue date                                                         |
+| `termination`           | `date`, `str`, or `None`              | `None`         | Maturity date or tenor string                                      |
+| `coupon`                | `float`                               | `0.0`          | Coupon rate (percentage, e.g., `0.05` for 5%)                      |
+| `amortization_schedule` | `list[tuple[date, float]]` or `None`  | `None`         | Principal repayment schedule as `[(date, amount), ...]`            |
+| `frequency`             | `str`                                 | `"s"`          | Coupon payment frequency                                           |
+| `settlement_days`       | `int`                                 | `1`            | Settlement lag in business days                                    |
+| `ex_div_days`           | `int`                                 | `0`            | Ex-dividend days before coupon payment                             |
+| `calendar`              | `str` or `None`                       | `None`         | Named calendar                                                     |
+| `currency`              | `str`                                 | `"USD"`        | Currency code                                                      |
+| `convention`            | `str`                                 | `"actactisda"` | Day count convention for coupon accrual                            |
+| `accrued_convention`    | `str` or `None`                       | `None`         | Separate day count for accrued interest (defaults to `convention`) |
+| `face_value`            | `float`                               | `100.0`        | Initial face value of the bond                                     |
+| `modifier`              | `str`                                 | `"none"`       | Business day adjustment rule                                       |
+| `disc_curve_id`         | `str` or `None`                       | `None`         | Discount curve identifier for [Solver](solver#solver) lookup    |
+
+See [Conventions](../conventions) for accepted values for `frequency`, `convention`, and `modifier`.
+
+### Methods
+
+#### Standard Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par rate against curves    |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+| `.spread(curves, *, solver=None)`         | `float`     | Par spread                 |
+
+#### Price and Yield
+
+| Method                                                             | Returns | Description                             |
+| ------------------------------------------------------------------ | ------- | --------------------------------------- |
+| `.price(curves, *, solver=None, settlement=None)`                  | `float` | Clean price                             |
+| `.dirty_price(curves, *, solver=None, settlement=None)`            | `float` | Dirty price (clean + accrued)           |
+| `.accrued_interest(settlement)`                                    | `float` | Accrued interest at settlement date     |
+| `.ytm(clean_price, settlement, convention="periodic")`             | `float` | Yield to maturity from clean price      |
+| `.price_from_ytm(ytm, settlement, convention="periodic")`          | `float` | Clean price from yield to maturity      |
+
+#### Risk Analytics
+
+| Method                                                                                  | Returns | Description                     |
+| --------------------------------------------------------------------------------------- | ------- | ------------------------------- |
+| `.duration(curves, *, solver=None, metric="modified", settlement=None)`                 | `float` | Modified or Macaulay duration   |
+| `.convexity(curves, *, solver=None, settlement=None)`                                   | `float` | Price convexity                 |
+| `.dv01(curves, *, solver=None)`                                                         | `float` | Dollar value of 1bp             |
+| `.z_spread(curves, *, solver=None, price=None, settlement=None)`                        | `float` | Z-spread over curve             |
+| `.asw_spread(curves, *, solver=None, price=None, method="par_par", settlement=None)`    | `float` | Asset swap spread               |
+| `.analytic_delta(curves, *, solver=None)`                                               | `float` | Analytic delta                  |
+
+### Example
+
+```python
+import math
+import datetime
+from vade import AmortizingBond, DiscountCurve
+
+# Flat 4% continuously compounded curve
+base = datetime.date(2024, 1, 1)
+nodes = {base: 1.0}
+for y in range(1, 11):
+    nodes[datetime.date(2024 + y, 1, 1)] = math.exp(-0.04 * y)
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+
+bond = AmortizingBond(
+    effective=datetime.date(2024, 1, 1),
+    termination=datetime.date(2029, 1, 1),
+    coupon=0.05,
+    amortization_schedule=[
+        (datetime.date(2026, 1, 1), 25.0),   # repay 25 at year 2
+        (datetime.date(2028, 1, 1), 25.0),   # repay 25 at year 4
+    ],
+    frequency="a",
+    face_value=100.0,
+    convention="actactisda",
+)
+settlement = datetime.date(2024, 1, 2)
+
+price = bond.price(curve, settlement=settlement)
+assert 95.0 < price < 115.0  # above par when coupon > yield
+
+ytm = bond.ytm(float(price), settlement)
+assert 0.03 < ytm < 0.06  # reasonable yield range
+
+# Accrued interest reflects current notional
+ai_early = bond.accrued_interest(datetime.date(2024, 7, 1))
+ai_late = bond.accrued_interest(datetime.date(2026, 7, 1))
+assert ai_early > ai_late  # lower notional after amortization
+```
+
+______________________________________________________________________
+
+## PIKBond
+
+Payment-in-kind bond where accrued interest compounds into a growing notional. _Python wrapper composing FixedLeg with PIK notional accretion._
+
+With `pik_fraction=1.0` (full PIK), no cash coupons are paid; all interest accrues to principal. With `pik_fraction=0.5`, half the coupon is paid in cash and half compounds into the notional. The `notional_schedule()` method returns the growing notional at each period boundary.
+
+### Constructor
+
+```bash
+PIKBond(
+    *,
+    effective=None,
+    termination=None,
+    coupon=0.0,
+    pik_fraction=1.0,
+    frequency="s",
+    settlement_days=1,
+    ex_div_days=0,
+    calendar=None,
+    currency="USD",
+    convention="actactisda",
+    accrued_convention=None,
+    face_value=100.0,
+    modifier="none",
+    disc_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name                 | Type                       | Default        | Description                                                        |
+| -------------------- | -------------------------- | -------------- | ------------------------------------------------------------------ |
+| `effective`          | `datetime.date` or `None`  | `None`         | Issue date                                                         |
+| `termination`        | `date`, `str`, or `None`   | `None`         | Maturity date or tenor string                                      |
+| `coupon`             | `float`                    | `0.0`          | Coupon rate (percentage, e.g., `0.06` for 6%)                      |
+| `pik_fraction`       | `float`                    | `1.0`          | Fraction of coupon paid in kind (`1.0` = full PIK, `0.0` = all cash) |
+| `frequency`          | `str`                      | `"s"`          | Coupon payment frequency                                           |
+| `settlement_days`    | `int`                      | `1`            | Settlement lag in business days                                    |
+| `ex_div_days`        | `int`                      | `0`            | Ex-dividend days before coupon payment                             |
+| `calendar`           | `str` or `None`            | `None`         | Named calendar                                                     |
+| `currency`           | `str`                      | `"USD"`        | Currency code                                                      |
+| `convention`         | `str`                      | `"actactisda"` | Day count convention for coupon accrual                            |
+| `accrued_convention` | `str` or `None`            | `None`         | Separate day count for accrued interest (defaults to `convention`) |
+| `face_value`         | `float`                    | `100.0`        | Initial face value of the bond                                     |
+| `modifier`           | `str`                      | `"none"`       | Business day adjustment rule                                       |
+| `disc_curve_id`      | `str` or `None`            | `None`         | Discount curve identifier for [Solver](solver#solver) lookup    |
+
+See [Conventions](../conventions) for accepted values for `frequency`, `convention`, and `modifier`.
+
+### Methods
+
+#### Standard Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par rate against curves    |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+| `.spread(curves, *, solver=None)`         | `float`     | Par spread                 |
+
+#### Price and Yield
+
+| Method                                                             | Returns | Description                             |
+| ------------------------------------------------------------------ | ------- | --------------------------------------- |
+| `.price(curves, *, solver=None, settlement=None)`                  | `float` | Clean price                             |
+| `.dirty_price(curves, *, solver=None, settlement=None)`            | `float` | Dirty price (clean + accrued)           |
+| `.accrued_interest(settlement)`                                    | `float` | Accrued interest at settlement date     |
+| `.ytm(clean_price, settlement, convention="periodic")`             | `float` | Yield to maturity from clean price      |
+| `.price_from_ytm(ytm, settlement, convention="periodic")`          | `float` | Clean price from yield to maturity      |
+
+#### Risk Analytics
+
+| Method                                                                                  | Returns | Description                     |
+| --------------------------------------------------------------------------------------- | ------- | ------------------------------- |
+| `.duration(curves, *, solver=None, metric="modified", settlement=None)`                 | `float` | Modified or Macaulay duration   |
+| `.convexity(curves, *, solver=None, settlement=None)`                                   | `float` | Price convexity                 |
+| `.dv01(curves, *, solver=None)`                                                         | `float` | Dollar value of 1bp             |
+| `.z_spread(curves, *, solver=None, price=None, settlement=None)`                        | `float` | Z-spread over curve             |
+| `.asw_spread(curves, *, solver=None, price=None, method="par_par", settlement=None)`    | `float` | Asset swap spread               |
+| `.analytic_delta(curves, *, solver=None)`                                               | `float` | Analytic delta                  |
+
+#### PIK-Specific
+
+| Method              | Returns                    | Description                              |
+| ------------------- | -------------------------- | ---------------------------------------- |
+| `.notional_schedule()` | `list[tuple[date, float]]` | Growing notional at each period boundary |
+
+### Example
+
+```python
+import math
+import datetime
+from vade import PIKBond, DiscountCurve
+
+# Flat 4% continuously compounded curve
+base = datetime.date(2024, 1, 1)
+nodes = {base: 1.0}
+for y in range(1, 11):
+    nodes[datetime.date(2024 + y, 1, 1)] = math.exp(-0.04 * y)
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+
+bond = PIKBond(
+    effective=datetime.date(2024, 1, 1),
+    termination=datetime.date(2029, 1, 1),
+    coupon=0.06,
+    pik_fraction=1.0,   # full PIK: all interest compounds
+    frequency="a",
+    face_value=100.0,
+    convention="actactisda",
+)
+
+# Full PIK means no cash coupon accrues
+assert bond.accrued_interest(datetime.date(2024, 7, 1)) == 0.0
+
+# Notional grows each period
+schedule = bond.notional_schedule()
+assert schedule[0][1] == 100.0    # initial face value
+assert schedule[1][1] > 100.0     # notional grows after first period
+
+price = bond.price(curve, settlement=datetime.date(2024, 1, 2))
+assert 100.0 < price < 120.0  # above par for 6% PIK vs 4% discount
+```
+
+______________________________________________________________________
+
+## CappedFloatRateNote
+
+Floating rate note with embedded cap and/or floor on the coupon rate. _Python wrapper composing FloatLeg with Black-76 or Bachelier cap/floor pricing._
+
+Requires `vol` (volatility) -- there is no intrinsic-only fallback. At least one of `cap_rate` or `floor_rate` must be specified. When both are set, the instrument is a collared FRN. Optionally supports sub-period compounding via `fixing_frequency`.
+
+### Constructor
+
+```bash
+CappedFloatRateNote(
+    *,
+    effective=None,
+    termination=None,
+    spread=0.0,
+    frequency="q",
+    fixing_frequency=None,
+    cap_rate=None,
+    floor_rate=None,
+    vol=None,
+    vol_model="black76",
+    settlement_days=2,
+    ex_div_days=0,
+    calendar=None,
+    currency="USD",
+    convention="act360",
+    accrued_convention=None,
+    face_value=100.0,
+    modifier="mf",
+    disc_curve_id=None,
+)
+```
+
+### Parameters
+
+| Name                 | Type                       | Default    | Description                                                              |
+| -------------------- | -------------------------- | ---------- | ------------------------------------------------------------------------ |
+| `effective`          | `datetime.date` or `None`  | `None`     | Issue date                                                               |
+| `termination`        | `date`, `str`, or `None`   | `None`     | Maturity date or tenor string                                            |
+| `spread`             | `float`                    | `0.0`      | Spread over floating rate (decimal)                                      |
+| `frequency`          | `str`                      | `"q"`      | Coupon payment frequency                                                 |
+| `fixing_frequency`   | `str` or `None`            | `None`     | Sub-period fixing frequency (e.g., `"m"` for monthly within quarterly)   |
+| `cap_rate`           | `float` or `None`          | `None`     | Cap strike rate (decimal). At least one of cap_rate/floor_rate required. |
+| `floor_rate`         | `float` or `None`          | `None`     | Floor strike rate (decimal)                                              |
+| `vol`                | `float` or `None`          | `None`     | Volatility for option pricing. **Required** -- no intrinsic fallback.    |
+| `vol_model`          | `str`                      | `"black76"` | Pricing model: `"black76"` or `"bachelier"`                             |
+| `settlement_days`    | `int`                      | `2`        | Settlement lag in business days                                          |
+| `ex_div_days`        | `int`                      | `0`        | Ex-dividend days before coupon payment                                   |
+| `calendar`           | `str` or `None`            | `None`     | Named calendar                                                           |
+| `currency`           | `str`                      | `"USD"`    | Currency code                                                            |
+| `convention`         | `str`                      | `"act360"` | Day count convention                                                     |
+| `accrued_convention` | `str` or `None`            | `None`     | Separate day count for accrued interest (defaults to `convention`)       |
+| `face_value`         | `float`                    | `100.0`    | Face value                                                               |
+| `modifier`           | `str`                      | `"mf"`     | Business day adjustment rule                                             |
+| `disc_curve_id`      | `str` or `None`            | `None`     | Discount curve identifier for [Solver](solver#solver) lookup          |
+
+See [Conventions](../conventions) for accepted values for `frequency`, `convention`, and `modifier`.
+
+### Methods
+
+#### Standard Methods
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par rate against curves    |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+| `.spread(curves, *, solver=None)`         | `float`     | Par spread                 |
+
+#### Price and Yield
+
+| Method                                                             | Returns | Description                             |
+| ------------------------------------------------------------------ | ------- | --------------------------------------- |
+| `.price(curves, *, solver=None, settlement=None)`                  | `float` | Clean price                             |
+| `.dirty_price(curves, *, solver=None, settlement=None)`            | `float` | Dirty price (clean + accrued)           |
+| `.accrued_interest(settlement)`                                    | `float` | Accrued interest at settlement date     |
+| `.ytm(clean_price, settlement, convention="periodic")`             | `float` | Yield to maturity from clean price      |
+| `.price_from_ytm(ytm, settlement, convention="periodic")`          | `float` | Clean price from yield to maturity      |
+
+#### Risk Analytics
+
+| Method                                                                                  | Returns | Description                     |
+| --------------------------------------------------------------------------------------- | ------- | ------------------------------- |
+| `.duration(curves, *, solver=None, metric="modified", settlement=None)`                 | `float` | Modified or Macaulay duration   |
+| `.convexity(curves, *, solver=None, settlement=None)`                                   | `float` | Price convexity                 |
+| `.dv01(curves, *, solver=None)`                                                         | `float` | Dollar value of 1bp             |
+| `.z_spread(curves, *, solver=None, price=None, settlement=None)`                        | `float` | Z-spread over curve             |
+| `.asw_spread(curves, *, solver=None, price=None, method="par_par", settlement=None)`    | `float` | Asset swap spread               |
+| `.analytic_delta(curves, *, solver=None)`                                               | `float` | Analytic delta                  |
+
+### Example
+
+```python
+import math
+import datetime
+from vade import CappedFloatRateNote, FloatRateNote, DiscountCurve
+
+# Steep discount curve (rates ~5-6%)
+base = datetime.date(2024, 1, 1)
+nodes = {base: 1.0}
+for y in range(1, 11):
+    nodes[datetime.date(2024 + y, 1, 1)] = math.exp(-0.055 * y)
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+
+# Uncapped FRN for comparison
+frn = FloatRateNote(
+    effective=datetime.date(2024, 1, 1),
+    termination=datetime.date(2026, 1, 1),
+    spread=0.0,
+    frequency="q",
+    convention="act360",
+)
+frn_price = frn.dirty_price(curves=[curve, curve])
+
+# Capped FRN with 2% cap (well below market rates)
+capped = CappedFloatRateNote(
+    effective=datetime.date(2024, 1, 1),
+    termination=datetime.date(2026, 1, 1),
+    spread=0.0,
+    frequency="q",
+    cap_rate=0.02,
+    vol=0.20,
+    convention="act360",
+)
+capped_price = capped.dirty_price(curves=[curve, curve])
+
+assert isinstance(capped_price, float)
+assert capped_price < frn_price  # cap reduces value to investor
+```
+
+______________________________________________________________________
+
+## AssetSwap
+
+Asset swap decomposing a bond into a floating-rate equivalent. _Python wrapper composing bond + floating leg._
+
+Supports `"par"` (par-par) and `"non_par"` asset swap types. The par asset swap computes the spread over floating that makes the package NPV zero at par. The non-par variant requires a `dirty_price` input.
+
+See also: [Spread Analytics Guide](../guides/credit/spread-analytics) for asset swap workflows and par vs non-par comparison.
+
+### Constructor
+
+```bash
+AssetSwap(bond, *, asw_type="par", dirty_price=None, spread=None, disc_curve_id=None)
+```
+
+### Parameters
+
+| Name            | Type                               | Default  | Description                                                     |
+| --------------- | ---------------------------------- | -------- | --------------------------------------------------------------- |
+| `bond`          | bond instrument                    | *required* | Underlying bond (FixedRateBond, FloatRateNote, StepUpBond, etc.). Positional. |
+| `asw_type`      | `str`                              | `"par"`  | Asset swap type: `"par"` or `"non_par"`                         |
+| `dirty_price`   | `float` or `None`                  | `None`   | Dirty price of the bond (required for `"non_par"`)              |
+| `spread`        | `float` or `None`                  | `None`   | Fixed spread override                                           |
+| `disc_curve_id` | `str` or `None`                    | `None`   | Discount curve identifier for [Solver](solver#solver) lookup |
+
+### Methods
+
+| Method                                    | Returns     | Description                       |
+| ----------------------------------------- | ----------- | --------------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Asset swap spread                 |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value of the package  |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table       |
+
+### Example
+
+```python
+import math
+import datetime
+from vade import AssetSwap, FixedRateBond, DiscountCurve
+
+# Flat 3% continuously compounded curve
+base = datetime.date(2024, 1, 1)
+nodes = {base: 1.0}
+for y in range(1, 11):
+    nodes[datetime.date(2024 + y, 1, 1)] = math.exp(-0.03 * y)
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f", id="disc")
+
+bond = FixedRateBond(
+    effective=datetime.date(2024, 1, 1),
+    termination="5Y",
+    coupon=0.04,
+    frequency="s",
+    face_value=100.0,
+)
+
+# Par asset swap
+asw = AssetSwap(bond=bond, asw_type="par")
+spread = asw.rate(curves=curve)
+assert isinstance(spread, float)
+assert -0.5 < spread < 0.5  # spread in reasonable range
+
+# NPV is zero at fair spread (no fixed spread override)
+npv = asw.npv(curves=curve)
+assert abs(npv) < 1e-8
+
+# Non-par asset swap with explicit dirty price
+asw_np = AssetSwap(bond=bond, asw_type="non_par", dirty_price=102.5)
+spread_np = asw_np.rate(curves=curve)
+assert isinstance(spread_np, float)
+```
+
+______________________________________________________________________
+
+## CallableBond
+
+Bond with embedded call and/or put options, priced via Hull-White trinomial tree. _Python wrapper composing bond + option schedule._
+
+Tree-based methods require Hull-White model parameters: `a` (mean reversion speed) and `sigma` (short-rate volatility). Standard bond methods (rate, npv, cashflows) delegate to the underlying bond.
+
+See also: [Callable Bonds Guide](../guides/credit/callable-bonds) for OAS analysis and effective duration workflows.
+
+### Constructor
+
+```bash
+CallableBond(bond, *, call_schedule=None, put_schedule=None, disc_curve_id=None)
+```
+
+### Parameters
+
+| Name            | Type                                | Default  | Description                                                     |
+| --------------- | ----------------------------------- | -------- | --------------------------------------------------------------- |
+| `bond`          | bond instrument                     | *required* | Underlying bond (typically FixedRateBond). Positional.         |
+| `call_schedule` | `list[tuple[date, float]]` or `None` | `None`  | Call dates and prices as `[(date, strike_price), ...]`          |
+| `put_schedule`  | `list[tuple[date, float]]` or `None` | `None`  | Put dates and prices as `[(date, strike_price), ...]`           |
+| `disc_curve_id` | `str` or `None`                     | `None`   | Discount curve identifier for [Solver](solver#solver) lookup |
+
+### Methods
+
+#### Standard Methods (delegated to underlying bond)
+
+| Method                                    | Returns     | Description                |
+| ----------------------------------------- | ----------- | -------------------------- |
+| `.rate(curves, *, solver=None)`           | `float`     | Par rate against curves    |
+| `.npv(curves, *, solver=None)`            | `float`     | Net present value          |
+| `.cashflows(curves, *, solver=None)`      | `DataFrame` | Period-level cashflow table |
+
+#### Tree-Based Methods (Hull-White)
+
+| Method                                                                                          | Returns | Description                                      |
+| ----------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------ |
+| `.tree_price(curves, a, sigma, *, spread=0.0)`                                                  | `float` | Option-adjusted price via trinomial tree         |
+| `.oas(curves, market_price, a, sigma)`                                                          | `float` | Option-adjusted spread from market price         |
+| `.effective_duration(curves, a, sigma, *, oas=0.0, bump=0.0001)`                                | `float` | Effective duration (curve bump)                  |
+| `.effective_convexity(curves, a, sigma, *, oas=0.0, bump=0.0001)`                               | `float` | Effective convexity (curve bump)                 |
+| `.vega(curves, a, sigma, *, oas=0.0, bump=0.0001)`                                              | `float` | Vega (price sensitivity to volatility)           |
+
+Tree-based methods take `a` (mean reversion speed, e.g., `0.1`) and `sigma` (short-rate vol, e.g., `0.01`).
+
+### Example
+
+```python
+import math
+import datetime
+from vade import CallableBond, FixedRateBond, DiscountCurve
+
+# Flat 3% continuously compounded curve
+base = datetime.date(2024, 1, 1)
+nodes = {base: 1.0}
+for y in range(1, 11):
+    nodes[datetime.date(2024 + y, 1, 1)] = math.exp(-0.03 * y)
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f", id="disc")
+
+bond = FixedRateBond(
+    effective=datetime.date(2024, 1, 1),
+    termination="5Y",
+    coupon=0.05,
+    frequency="a",
+    face_value=100.0,
+)
+
+cb = CallableBond(
+    bond=bond,
+    call_schedule=[
+        (datetime.date(2026, 1, 1), 100.0),
+        (datetime.date(2027, 1, 1), 100.0),
+        (datetime.date(2028, 1, 1), 100.0),
+    ],
+)
+
+# Tree price with Hull-White parameters
+tree_px = cb.tree_price(curves=curve, a=0.1, sigma=0.01)
+assert 80.0 < tree_px < 120.0  # reasonable price range
+
+# OAS: use tree_price as market price => OAS should be ~0
+oas = cb.oas(curves=curve, market_price=tree_px, a=0.1, sigma=0.01)
+assert abs(oas) < 1e-4  # OAS ~0 when market = model price
+
+# Effective duration and convexity
+eff_dur = cb.effective_duration(curves=curve, a=0.1, sigma=0.01)
+assert eff_dur > 0  # positive duration
+
+eff_cvx = cb.effective_convexity(curves=curve, a=0.1, sigma=0.01)
+assert isinstance(eff_cvx, float)
+```
+
+______________________________________________________________________
+
+## CDS
+
+Credit Default Swap with hazard rate curve pricing. _Rust-backed._
+
+**Alias:** `CDS = CreditDefaultSwap`
+
+### Constructor
+
+```bash
+CDS(
+    *,
+    spec=None,
+    effective=None,
+    termination=None,
+    frequency="q",
+    notional=10_000_000.0,
+    recovery_rate=0.4,
+    fixed_rate=100.0,
+    convention="act360",
+    currency="USD",
+    premium_accrued=True,
+    modifier="mf",
+    stub="shortfront",
+)
+```
+
+### Parameters
+
+| Name              | Type                       | Default          | Description                                           |
+| ----------------- | -------------------------- | ---------------- | ----------------------------------------------------- |
+| `spec`            | `str` or `None`            | `None`           | Instrument spec name                                  |
+| `effective`       | `datetime.date` or `None`  | `None`           | Protection start date                                 |
+| `termination`     | `date`, `str`, or `None`   | `None`           | Protection end date or tenor string (e.g., `"5Y"`)    |
+| `frequency`       | `str`                      | `"q"`            | Premium payment frequency                             |
+| `notional`        | `float`                    | `10_000_000.0`   | Notional amount                                       |
+| `recovery_rate`   | `float`                    | `0.4`            | Assumed recovery rate (decimal, e.g., `0.4` for 40%)  |
+| `fixed_rate`      | `float`                    | `100.0`          | Fixed premium rate (basis points)                     |
+| `convention`      | `str`                      | `"act360"`       | Day count convention                                  |
+| `currency`        | `str`                      | `"USD"`          | Currency code                                         |
+| `premium_accrued` | `bool`                     | `True`           | Whether premium accrues to default date               |
+| `modifier`        | `str`                      | `"mf"`           | Business day adjustment rule                          |
+| `stub`            | `str`                      | `"shortfront"`   | Stub period preference                                |
+
+See [Conventions](../conventions) for accepted values for `frequency`, `convention`, `modifier`, and `stub`.
+
+### Methods
+
+CDS methods take two separate curve arguments: a discount curve and a [CreditImpliedCurve](curves#creditimpliedcurve) for survival probabilities.
+
+| Method                                                  | Returns     | Description                        |
+| ------------------------------------------------------- | ----------- | ---------------------------------- |
+| `.rate(disc_curve, credit_curve)`                       | `float`     | Par spread (same as `.spread`)     |
+| `.npv(disc_curve, credit_curve)`                        | `float`     | Net present value                  |
+| `.spread(disc_curve, credit_curve)`                     | `float`     | Par spread                         |
+| `.cashflows(disc_curve, credit_curve)`                  | `DataFrame` | Period-level cashflow table        |
+| `.accrued(today=None)`                                  | `float`     | Accrued premium                    |
+| `.analytic_rec_risk(disc_curve, credit_curve)`          | `float`     | Recovery risk                      |
+| `.jtd(today=None)`                                      | `float`     | Jump-to-default exposure           |
+| `.ead()`                                                | `float`     | Exposure at default                |
+| `.upfront(disc_curve, credit_curve)`                    | `float`     | Upfront payment amount             |
+| `.to_upfront_spread(disc_curve, credit_curve)`          | `float`     | Convert running to upfront spread  |
+
+### Example
+
+```python
+import datetime
+from vade import CDS, DiscountCurve, CreditImpliedCurve
+
+disc_nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.97,
+    datetime.date(2026, 1, 1): 0.94,
+    datetime.date(2029, 1, 1): 0.85,
+}
+disc_curve = DiscountCurve(disc_nodes, interpolation="log_linear", convention="act365f")
+
+credit_nodes = {
+    datetime.date(2024, 1, 1): 1.0,
+    datetime.date(2025, 1, 1): 0.99,
+    datetime.date(2026, 1, 1): 0.98,
+    datetime.date(2029, 1, 1): 0.95,
+}
+credit_curve = CreditImpliedCurve(credit_nodes, convention="act365f", recovery_rate=0.4)
+
+cds = CDS(
+    effective=datetime.date(2024, 1, 1),
+    termination="5Y",
+    fixed_rate=100.0,
+    frequency="q",
+    convention="act360",
+    recovery_rate=0.4,
+)
+cds.npv(disc_curve, credit_curve)  # net present value
+cds.spread(disc_curve, credit_curve)  # par spread in basis points
+cds.ead()  # exposure at default
+```
+
+______________________________________________________________________
+
+## XCS
+
+Cross Currency Swap with 4-curve pricing model. _Python wrapper composing legs across currencies._
+
+**Alias:** `XCS = CrossCurrencySwap`
+
+### Constructor
+
+```bash
+XCS(
+    *,
+    effective=None,
+    termination=None,
+    frequency="q",
+    leg1_currency="EUR",
+    leg2_currency="USD",
+    leg1_notional=1_000_000.0,
+    leg2_notional=1_100_000.0,
+    initial_fx_rate=1.1,
+    fixed_rate=None,
+    notional_exchange=True,
+    convention="act360",
+    leg2_convention=None,
+    fixing_method="rfr_payment_delay",
+    spread=0.0,
+    modifier="mf",
+    stub="shortfront",
+    mtm_leg=None,
+)
+```
+
+### Parameters
+
+| Name                | Type                       | Default               | Description                                                  |
+| ------------------- | -------------------------- | --------------------- | ------------------------------------------------------------ |
+| `effective`         | `datetime.date` or `None`  | `None`                | Start date                                                   |
+| `termination`       | `date`, `str`, or `None`   | `None`                | End date or tenor string                                     |
+| `frequency`         | `str`                      | `"q"`                 | Payment frequency                                            |
+| `leg1_currency`     | `str`                      | `"EUR"`               | Leg 1 currency code                                          |
+| `leg2_currency`     | `str`                      | `"USD"`               | Leg 2 currency code                                          |
+| `leg1_notional`     | `float`                    | `1_000_000.0`         | Leg 1 notional amount                                        |
+| `leg2_notional`     | `float`                    | `1_100_000.0`         | Leg 2 notional amount                                        |
+| `initial_fx_rate`   | `float`                    | `1.1`                 | Initial FX rate (leg2/leg1)                                  |
+| `fixed_rate`        | `float` or `None`          | `None`                | Fixed rate on one leg (if applicable)                        |
+| `notional_exchange` | `bool`                     | `True`                | Whether to exchange notionals at start and end               |
+| `convention`        | `str`                      | `"act360"`            | Day count convention for leg 1                               |
+| `leg2_convention`   | `str` or `None`            | `None`                | Day count convention for leg 2 (defaults to `convention`)    |
+| `fixing_method`     | `str`                      | `"rfr_payment_delay"` | Rate fixing method                                           |
+| `spread`            | `float`                    | `0.0`                 | Spread on leg 2 (basis points)                               |
+| `modifier`          | `str`                      | `"mf"`                | Business day adjustment rule                                 |
+| `stub`              | `str`                      | `"shortfront"`        | Stub period preference                                       |
+| `mtm_leg`           | `int` or `None`            | `None`                | Mark-to-market reset leg (`1` or `2`)                        |
+
+See [Conventions](../conventions) for accepted values for `frequency`, `convention`, `fixing_method`, `modifier`, and `stub`.
+
+### Methods
+
+XCS methods require four separate curves (discount and forecast for each currency) plus [FXRates](fx#fxrates).
+
+| Method                                                                                           | Returns     | Description                    |
+| ------------------------------------------------------------------------------------------------ | ----------- | ------------------------------ |
+| `.rate(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast, fx_rates, metric="leg2")`             | `float`     | Cross-currency basis spread    |
+| `.npv(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast, fx_rates)`                             | `float`     | Net present value              |
+| `.cashflows(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast)`                                 | `DataFrame` | Period-level cashflow table    |
+
+### Example
+
+```python
+import datetime
+from vade import XCS, DiscountCurve, FXRates
+
+eur_disc = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97, datetime.date(2026, 1, 1): 0.94},
+    interpolation="log_linear", convention="act365f", id="eur_disc",
+)
+eur_fcast = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97, datetime.date(2026, 1, 1): 0.94},
+    interpolation="log_linear", convention="act365f", id="eur_fcast",
+)
+usd_disc = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.96, datetime.date(2026, 1, 1): 0.92},
+    interpolation="log_linear", convention="act365f", id="usd_disc",
+)
+usd_fcast = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.96, datetime.date(2026, 1, 1): 0.92},
+    interpolation="log_linear", convention="act365f", id="usd_fcast",
+)
+fx = FXRates({"eurusd": 1.10}, settlement=datetime.date(2024, 1, 1))
+
+xcs = XCS(
+    effective=datetime.date(2024, 1, 1),
+    termination="2Y",
+    frequency="q",
+    leg1_currency="EUR",
+    leg2_currency="USD",
+    leg1_notional=1_000_000.0,
+    leg2_notional=1_100_000.0,
+    initial_fx_rate=1.10,
+    convention="act360",
+)
+float(xcs.rate(eur_disc, eur_fcast, usd_disc, usd_fcast, fx))  # cross-currency basis spread
+float(xcs.npv(eur_disc, eur_fcast, usd_disc, usd_fcast, fx))  # NPV in base currency
+```
+
+______________________________________________________________________
+
+## FXForward
+
+FX Forward instrument. _Rust-backed._
+
+### Constructor
+
+```bash
+FXForward(
+    *,
+    pair="eurusd",
+    notional=1_000_000.0,
+    delivery=None,
+    currency="USD",
+)
+```
+
+### Parameters
+
+| Name       | Type                       | Default       | Description                                    |
+| ---------- | -------------------------- | ------------- | ---------------------------------------------- |
+| `pair`     | `str`                      | `"eurusd"`    | Currency pair (e.g., `"eurusd"`, `"gbpusd"`)   |
+| `notional` | `float`                    | `1_000_000.0` | Notional amount                                |
+| `delivery` | `datetime.date` or `None`  | `None`        | Delivery date                                  |
+| `currency` | `str`                      | `"USD"`       | Settlement currency                            |
+
+### Methods
+
+FXForward methods take a discount curve, forecast curve, and [FXRates](fx#fxrates).
+
+| Method                                              | Returns     | Description                |
+| --------------------------------------------------- | ----------- | -------------------------- |
+| `.rate(disc_curve, forecast_curve, fx_rates)`       | `float`     | Forward FX rate            |
+| `.npv(disc_curve, forecast_curve, fx_rates)`        | `float`     | Net present value          |
+| `.cashflows(disc_curve, forecast_curve, fx_rates)`  | `DataFrame` | Period-level cashflow table |
+
+### Example
+
+```python
+import datetime
+from vade import FXForward, DiscountCurve, FXRates
+
+eur_curve = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97},
+    interpolation="log_linear", convention="act365f", id="eur_curve",
+)
+usd_curve = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.96},
+    interpolation="log_linear", convention="act365f", id="usd_curve",
+)
+fx = FXRates({"eurusd": 1.10}, settlement=datetime.date(2024, 1, 1))
+
+fxf = FXForward(
+    pair="eurusd",
+    notional=1_000_000.0,
+    delivery=datetime.date(2024, 7, 1),
+    currency="USD",
+)
+float(fxf.rate(usd_curve, eur_curve, fx))  # forward FX rate
+float(fxf.npv(usd_curve, eur_curve, fx))  # NPV of the forward position
+```
+
+______________________________________________________________________
+
+## Non-Deliverable Instruments
+
+Non-deliverable (ND) instruments settle in a convertible currency rather than
+the restricted currency in which cashflows accrue. FX conversion uses
+per-period fixings (known or IRP-implied).
+
+______________________________________________________________________
+
+## NDF
+
+Non-Deliverable Forward: single-currency net settlement of an FX forward.
+Subclass of `FXForward`.
+
+### Constructor
+
+```bash
+NDF(
+    *,
+    spec=None,           # Market convention ("usdbrl_ndf", "usdkrw_ndf", ...)
+    effective=None,      # Effective / trade date
+    delivery=None,       # Settlement date
+    pair="usdbrl",       # FX pair (restricted vs settlement)
+    notional=1_000_000.0,
+    currency="USD",      # Notional currency
+    settlement_currency="usd",
+    contracted_rate=None,  # Agreed FX rate (None = at-market)
+    fx_fixings=None,     # dict[date, float] for known fixings
+)
+```
+
+### Methods
+
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `rate` | `(disc_curve, forecast_curve, fx_rates)` | Implied forward rate (IRP) |
+| `npv` | `(disc_curve, forecast_curve, fx_rates)` | Net settlement NPV in settlement currency |
+| `cashflows` | `(disc_curve, forecast_curve, fx_rates)` | Polars DataFrame |
+| `spread` | `(disc_curve, forecast_curve, fx_rates)` | Spread to contracted rate |
+| `pillar_date` | `()` | Delivery date |
+| `to_json` | `()` | JSON-serializable dict |
+| `from_json` | `(data)` | Reconstruct NDF from dict |
+
+### Example
+
+```python
+import datetime
+from vade import NDF, DiscountCurve, FXRates
+
+ndf = NDF(
+    spec="usdbrl_ndf",
+    effective=datetime.date(2025, 6, 16),
+    delivery=datetime.date(2025, 9, 16),
+    notional=1_000_000.0,
+    contracted_rate=5.25,
+)
+
+usd = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2026, 6, 16): 0.96},
+    interpolation="log_linear", convention="act360",
+)
+brl = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2026, 6, 16): 0.88},
+    interpolation="log_linear", convention="act360",
+)
+fxr = FXRates({"usdbrl": 5.20}, settlement=datetime.date(2025, 6, 16))
+
+fair_rate = ndf.rate(usd, brl, fxr)
+npv = ndf.npv(usd, brl, fxr)
+assert abs(float(fair_rate)) < 10
+assert abs(float(npv)) < 1e8
+```
+
+______________________________________________________________________
+
+## NDIRS
+
+Non-Deliverable Interest Rate Swap: IRS where cashflows accrue in a
+restricted currency but settle in a convertible currency via per-period
+FX conversion. Subclass of `InterestRateSwap`.
+
+Uses a 3-curve model: settlement discount, restricted forecast, restricted discount.
+
+### Constructor
+
+```bash
+NDIRS(
+    *,
+    spec=None,             # Market convention ("usdbrl_ndirs", ...)
+    effective=None,
+    termination=None,      # date or tenor string ("5Y")
+    frequency="s",
+    fixed_rate=0.0,
+    notional=1_000_000.0,
+    convention="act360",
+    settlement_currency="usd",
+    pair="usdbrl",
+    fx_fixings=None,       # dict[date, float] known FX fixings
+)
+```
+
+### Methods
+
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `rate` | `(curves=[disc, forecast, leg2_disc], fx_rates=fxr)` | Par fixed rate |
+| `npv` | `(curves=[disc, forecast, leg2_disc], fx_rates=fxr)` | NPV in settlement currency |
+| `cashflows` | `(curves=[disc, forecast, leg2_disc], fx_rates=fxr)` | Polars DataFrame with settlement columns |
+| `spread` | `(curves=[disc, forecast, leg2_disc], fx_rates=fxr)` | Par spread on float leg |
+| `pillar_date` | `()` | Maturity date |
+| `to_json` | `()` | JSON-serializable dict |
+| `from_json` | `(data)` | Reconstruct NDIRS from dict |
+
+Curve arguments: `disc_curve` = settlement discount, `forecast_curve` = restricted forecast,
+`leg2_disc_curve` = restricted discount (for IRP forwards).
+
+### Example
+
+```python
+import datetime
+from vade import NDIRS, DiscountCurve, FXRates
+
+ndirs = NDIRS(
+    spec="usdbrl_ndirs",
+    effective=datetime.date(2025, 6, 16),
+    termination="2Y",
+    fixed_rate=10.0,
+    notional=1_000_000.0,
+)
+
+usd = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2028, 6, 16): 0.89},
+    interpolation="log_linear", convention="act360",
+)
+brl = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2028, 6, 16): 0.71},
+    interpolation="log_linear", convention="act360",
+)
+fxr = FXRates({"usdbrl": 5.20}, settlement=datetime.date(2025, 6, 16))
+
+par_rate = ndirs.rate(curves=[usd, brl, brl], fx_rates=fxr)
+npv = ndirs.npv(curves=[usd, brl, brl], fx_rates=fxr)
+assert 0 < float(par_rate) < 30
+assert abs(float(npv)) < 1e8
+```
+
+______________________________________________________________________
+
+## NDXCS
+
+Non-Deliverable Cross-Currency Swap: one leg is non-deliverable with
+cashflows converted via per-period FX fixings and settled in a convertible
+currency. Supports notional exchanges and MTM resets on the ND leg.
+Subclass of `CrossCurrencySwap`.
+
+### Constructor
+
+```bash
+NDXCS(
+    *,
+    spec=None,               # Market convention ("usdbrl_ndxcs", ...)
+    effective=None,
+    termination=None,        # date or tenor string ("5Y")
+    frequency="q",
+    leg1_currency="USD",
+    leg2_currency="BRL",
+    leg1_notional=1_000_000.0,
+    leg2_notional=5_000_000.0,
+    initial_fx_rate=5.0,
+    fixed_rate=None,         # None = float-float
+    notional_exchange=True,
+    settlement_currency="usd",
+    nd_leg=2,                # Which leg is non-deliverable (1 or 2)
+    pair=None,               # FX pair (derived from currencies if None)
+    fx_fixings=None,         # dict[date, float] for ALL FX fixing needs
+    mtm_leg=None,            # Optional MTM notional reset leg
+)
+```
+
+### Methods
+
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `rate` | `(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast, fx_rates)` | Par basis spread on ND leg |
+| `npv` | `(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast, fx_rates)` | NPV in settlement currency |
+| `cashflows` | `(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast, fx_rates)` | Polars DataFrame with settlement columns |
+| `spread` | `(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast, fx_rates)` | Par floating spread |
+| `pillar_date` | `()` | Maturity date |
+| `to_json` | `()` | JSON-serializable dict |
+| `from_json` | `(data)` | Reconstruct NDXCS from dict |
+
+### Example
+
+```bash
+import datetime
+from vade import NDXCS, DiscountCurve, FXRates
+
+ndxcs = NDXCS(
+    effective=datetime.date(2025, 6, 16),
+    termination="2Y",
+    leg1_currency="USD",
+    leg2_currency="BRL",
+    settlement_currency="usd",
+    nd_leg=2,
+    pair="usdbrl",
+    leg1_notional=1_000_000.0,
+    leg2_notional=5_000_000.0,
+    initial_fx_rate=5.0,
+    frequency="q",
+    convention="act360",
+)
+
+usd = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2028, 6, 16): 0.89},
+    interpolation="log_linear", convention="act360",
+)
+brl = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2028, 6, 16): 0.71},
+    interpolation="log_linear", convention="act360",
+)
+fxr = FXRates({"usdbrl": 5.20}, settlement=datetime.date(2025, 6, 16))
+
+rate = ndxcs.rate(usd, usd, brl, brl, fxr)
+npv = ndxcs.npv(usd, usd, brl, brl, fxr)
+assert abs(float(rate)) < 500
+assert abs(float(npv)) < 1e8
+```
+
+______________________________________________________________________
+
+See [Curves](curves) for curve types used in pricing, [Solver](solver.md) for multi-curve calibration, and [FX](fx.md) for FX rate framework.

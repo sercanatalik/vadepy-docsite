@@ -1,0 +1,251 @@
+---
+title: "Curve Building"
+description: "Explore how interpolation method choice affects forward rates, and learn to work"
+---
+
+Explore how interpolation method choice affects forward rates, and learn to work
+with different curve types. This guide builds a calibrated
+[DiscountCurve](../../api/curves#discountcurve) and then reconstructs it with
+three interpolation methods to compare their forward rate profiles.
+
+---
+
+## Market Data and Calibration
+
+Set up a USD SOFR market dataset and calibrate a discount curve. The dataset
+covers tenors from 1-month deposits through 10-year swaps.
+
+```python
+import datetime
+from vade import DiscountCurve, IRS, FRA, Deposit, Solver
+
+effective = datetime.date(2025, 6, 16)
+
+nodes = {
+    effective: 1.0,
+    datetime.date(2025, 7, 16): 1.0,
+    datetime.date(2025, 9, 16): 1.0,
+    datetime.date(2025, 12, 16): 1.0,
+    datetime.date(2026, 6, 16): 1.0,
+    datetime.date(2027, 6, 16): 1.0,
+    datetime.date(2028, 6, 16): 1.0,
+    datetime.date(2030, 6, 16): 1.0,
+    datetime.date(2032, 6, 16): 1.0,
+    datetime.date(2035, 6, 16): 1.0,
+}
+
+curve = DiscountCurve(
+    nodes, interpolation="log_linear", convention="act360", id="sofr"
+)
+
+dep_1m = Deposit(effective=effective, termination="1m", rate=0.0, convention="act360")
+fra_3m = FRA(effective=effective, termination="3m", fixed_rate=0.0, convention="act360")
+fra_6m = FRA(effective=effective, termination="6m", fixed_rate=0.0, convention="act360")
+irs_1y = IRS(effective=effective, termination="1y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=effective, termination="3y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=effective, termination="5y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_7y = IRS(effective=effective, termination="7y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_10y = IRS(effective=effective, termination="10y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+
+instruments = [
+    (dep_1m, 0.0430),
+    (fra_3m, 0.0425),
+    (fra_6m, 0.0415),
+    (irs_1y, 4.00),
+    (irs_2y, 3.85),
+    (irs_3y, 3.75),
+    (irs_5y, 3.70),
+    (irs_7y, 3.75),
+    (irs_10y, 3.85),
+]
+
+solver = Solver(curves=[curve], instruments=instruments)
+result = solver.iterate()
+assert result.converged
+
+calibrated = solver.get_curve(0)
+float(calibrated.discount_factor(datetime.date(2026, 6, 16)))  # 0.9610212208394634
+float(calibrated.discount_factor(datetime.date(2030, 6, 16)))  # 0.8319869245862279
+```
+
+## Querying the Curve
+
+A calibrated curve supports three core queries: discount factors, zero rates,
+and forward rates. All rates use the [act360](../../conventions#day-count-conventions)
+day count convention specified at construction.
+
+```python
+import datetime
+from vade import DiscountCurve, IRS, FRA, Deposit, Solver
+
+effective = datetime.date(2025, 6, 16)
+
+nodes = {
+    effective: 1.0,
+    datetime.date(2025, 7, 16): 1.0,
+    datetime.date(2025, 9, 16): 1.0,
+    datetime.date(2025, 12, 16): 1.0,
+    datetime.date(2026, 6, 16): 1.0,
+    datetime.date(2027, 6, 16): 1.0,
+    datetime.date(2028, 6, 16): 1.0,
+    datetime.date(2030, 6, 16): 1.0,
+    datetime.date(2032, 6, 16): 1.0,
+    datetime.date(2035, 6, 16): 1.0,
+}
+
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act360", id="sofr")
+
+dep_1m = Deposit(effective=effective, termination="1m", rate=0.0, convention="act360")
+fra_3m = FRA(effective=effective, termination="3m", fixed_rate=0.0, convention="act360")
+fra_6m = FRA(effective=effective, termination="6m", fixed_rate=0.0, convention="act360")
+irs_1y = IRS(effective=effective, termination="1y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=effective, termination="2y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=effective, termination="3y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=effective, termination="5y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_7y = IRS(effective=effective, termination="7y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_10y = IRS(effective=effective, termination="10y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+
+instruments = [
+    (dep_1m, 0.0430), (fra_3m, 0.0425), (fra_6m, 0.0415),
+    (irs_1y, 4.00), (irs_2y, 3.85), (irs_3y, 3.75),
+    (irs_5y, 3.70), (irs_7y, 3.75), (irs_10y, 3.85),
+]
+
+solver = Solver(curves=[curve], instruments=instruments)
+result = solver.iterate()
+calibrated = solver.get_curve(0)
+
+# Discount factors
+float(calibrated.discount_factor(datetime.date(2026, 6, 16)))  # 0.9610212208394634
+float(calibrated.discount_factor(datetime.date(2030, 6, 16)))  # 0.8319869245862279
+float(calibrated.discount_factor(datetime.date(2035, 6, 16)))  # 0.680542109248269
+
+# Zero rates (continuously compounded, annualized)
+float(calibrated.zero_rate(effective, datetime.date(2026, 6, 16)))  # 0.039214150340492254
+float(calibrated.zero_rate(effective, datetime.date(2030, 6, 16)))  # 0.03626390009498523
+
+# Forward rates between future dates
+float(calibrated.forward_rate(datetime.date(2026, 6, 16), datetime.date(2027, 6, 16)))  # 0.03627210043804068
+float(calibrated.forward_rate(datetime.date(2027, 6, 16), datetime.date(2028, 6, 16)))  # 0.03477612714625993
+float(calibrated.forward_rate(datetime.date(2030, 6, 16), datetime.date(2032, 6, 16)))  # 0.038181993768805886
+```
+
+## Interpolation Comparison
+
+Rebuild the curve from calibrated nodes using three different interpolation
+methods to see how they affect forward rates between nodes. The calibrated
+discount factors at node dates are the same regardless of interpolation --
+differences appear only between nodes.
+
+[Log-linear](../../conventions#interpolation-methods) interpolation produces
+piecewise constant forward rates between nodes.
+[Linear-zero-rate](../../conventions#interpolation-methods) interpolation
+linearly interpolates in zero-rate space, producing smoother forward rates.
+[Flat-forward](../../conventions#interpolation-methods) is a step function that
+holds the forward rate constant within each node interval.
+
+```python
+import datetime
+from vade import DiscountCurve
+
+cal_nodes = {
+    datetime.date(2025, 6, 16): 1.0,
+    datetime.date(2025, 7, 16): 0.9964294610977332,
+    datetime.date(2025, 9, 16): 0.9891976578024332,
+    datetime.date(2025, 12, 16): 0.9791251319654892,
+    datetime.date(2026, 6, 16): 0.9610212208394634,
+    datetime.date(2027, 6, 16): 0.9263207970596119,
+    datetime.date(2028, 6, 16): 0.89414224902702,
+    datetime.date(2030, 6, 16): 0.8319869245862279,
+    datetime.date(2032, 6, 16): 0.7699195851637843,
+    datetime.date(2035, 6, 16): 0.680542109248269,
+}
+
+curve_ll = DiscountCurve(cal_nodes, interpolation="log_linear", convention="act360")
+curve_lz = DiscountCurve(cal_nodes, interpolation="linear_zero_rate", convention="act360")
+curve_ff = DiscountCurve(cal_nodes, interpolation="flat_forward", convention="act360")
+
+# Forward rates between 18M and 2Y (between the 1Y and 2Y nodes)
+start_1 = datetime.date(2026, 12, 16)
+end_1 = datetime.date(2027, 6, 16)
+
+float(curve_ll.forward_rate(start_1, end_1))  # 0.03627210043804068
+float(curve_lz.forward_rate(start_1, end_1))  # 0.035534583782283175
+float(curve_ff.forward_rate(start_1, end_1))  # 0.07274350093003831
+
+# Forward rates between 4Y and 5Y (between the 3Y and 5Y nodes)
+start_2 = datetime.date(2029, 6, 16)
+end_2 = datetime.date(2030, 6, 16)
+
+float(curve_ll.forward_rate(start_2, end_2))  # 0.035530567199720826
+float(curve_lz.forward_rate(start_2, end_2))  # 0.035285822519282804
+float(curve_ff.forward_rate(start_2, end_2))  # 0.07106113439944166
+```
+
+At node dates, all three methods agree because the underlying discount factors
+are identical. Between nodes, the methods diverge significantly -- log-linear
+produces smooth constant forward rates within each interval, linear-zero-rate
+varies gradually, and flat-forward creates large jumps at node boundaries.
+
+## LineCurve
+
+[LineCurve](../../api/curves#linecurve) stores zero rates directly instead of
+discount factors. This is useful for representing rate curves, spreads, or any
+quantity that should be interpolated linearly in its native space.
+
+```python
+import datetime
+from vade import LineCurve
+
+effective = datetime.date(2025, 6, 16)
+
+line_curve = LineCurve(
+    {
+        effective: 0.040,
+        datetime.date(2026, 6, 16): 0.039,
+        datetime.date(2027, 6, 16): 0.038,
+        datetime.date(2030, 6, 16): 0.037,
+    },
+    interpolation="linear",
+    convention="act360",
+)
+
+float(line_curve.discount_factor(datetime.date(2026, 6, 16)))  # 0.9612299019061498
+float(line_curve.zero_rate(effective, datetime.date(2026, 6, 16)))  # 0.039
+float(line_curve.zero_rate(effective, datetime.date(2027, 6, 16)))  # 0.038
+```
+
+## ForwardCurve
+
+[ForwardCurve](../../api/curves#forwardcurve) stores instantaneous forward
+rates. Nodes represent continuously compounded rates on a per-day basis -- to
+express an annualized 4% rate, divide by 365. Discount factors are computed by
+integrating the forward rate function.
+
+```python
+import datetime
+from vade import ForwardCurve
+
+effective = datetime.date(2025, 6, 16)
+
+fwd_curve = ForwardCurve(
+    {
+        effective: 0.04 / 365,
+        datetime.date(2026, 6, 16): 0.038 / 365,
+        datetime.date(2027, 6, 16): 0.037 / 365,
+        datetime.date(2030, 6, 16): 0.036 / 365,
+    },
+    interpolation="flat_forward",
+    convention="act365f",
+)
+
+float(fwd_curve.discount_factor(datetime.date(2026, 6, 16)))  # 0.9607894391523232
+float(fwd_curve.forward_rate(effective, datetime.date(2026, 6, 16)))  # 0.04
+float(fwd_curve.forward_rate(datetime.date(2026, 6, 16), datetime.date(2027, 6, 16)))  # 0.038
+```
+
+## Next Steps
+
+- [Pricing](pricing) -- price instruments against calibrated curves
+- [Calibration](../calibration) -- multi-curve frameworks and solver tuning

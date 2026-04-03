@@ -1,0 +1,158 @@
+---
+title: "Spread Analytics"
+description: "Compute interpolated swap spreads (I-spread) and asset swap spreads for bonds"
+---
+
+Compute interpolated swap spreads (I-spread) and asset swap spreads for bonds
+against calibrated curves. These measures quantify a bond's yield premium over
+the reference swap curve.
+
+---
+
+## Setup
+
+Create a 5-year fixed-rate bond and calibrate a discount curve for spread
+analysis. We also build a swap zero-rate curve (LineCurve) for I-spread
+computation.
+
+```python
+import datetime
+import math
+from vade import (
+    FixedRateBond, DiscountCurve, LineCurve, Deposit, IRS, Solver, AssetSwap,
+)
+
+effective = datetime.date(2025, 1, 15)
+settlement = datetime.date(2025, 6, 16)
+
+bond = FixedRateBond(
+    effective=effective,
+    termination="5y",
+    coupon=0.045,
+    frequency="s",
+    settlement_days=1,
+    convention="actactisda",
+    face_value=100.0,
+)
+
+curve = DiscountCurve(
+    {
+        settlement: 1.0,
+        datetime.date(2025, 9, 16): 1.0,
+        datetime.date(2026, 6, 16): 1.0,
+        datetime.date(2027, 6, 16): 1.0,
+        datetime.date(2028, 6, 16): 1.0,
+        datetime.date(2030, 6, 16): 1.0,
+    },
+    interpolation="log_linear",
+    convention="act360",
+    id="sofr",
+)
+
+dep = Deposit(effective=settlement, termination="3m", rate=0.0, convention="act360")
+irs_1y = IRS(effective=settlement, termination="1y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_2y = IRS(effective=settlement, termination="2y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_3y = IRS(effective=settlement, termination="3y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+irs_5y = IRS(effective=settlement, termination="5y", frequency="a", fixed_rate=0.0, convention="act360", float_convention="act360")
+
+instruments = [
+    (dep, 0.0440),
+    (irs_1y, 4.20),
+    (irs_2y, 4.10),
+    (irs_3y, 4.00),
+    (irs_5y, 3.90),
+]
+
+solver = Solver(curves=[curve], instruments=instruments)
+result = solver.iterate()
+assert result.converged
+
+calibrated = solver.get_curve(0)
+
+# Swap zero-rate curve for I-spread (interpolated swap rates)
+swap_curve = LineCurve(
+    {
+        settlement: 0.044,
+        datetime.date(2026, 6, 16): 0.042,
+        datetime.date(2027, 6, 16): 0.041,
+        datetime.date(2028, 6, 16): 0.040,
+        datetime.date(2030, 6, 16): 0.039,
+    },
+    convention="act365f",
+)
+```
+
+## I-Spread
+
+The I-spread (interpolated spread) is the difference between a bond's yield to
+maturity and the linearly interpolated swap rate at the bond's maturity. Unlike
+the Z-spread (which shifts the entire discount curve), the I-spread uses a
+single-point comparison against the swap curve.
+
+See [FixedRateBond.i\_spread](../../api/instruments#fixedratebond) API reference.
+
+```python continuation
+i_sprd = bond.i_spread(settlement, swap_curve)
+
+assert isinstance(i_sprd, float)
+assert -0.05 < i_sprd < 0.05  # reasonable range
+```
+
+## Asset Swap Spread
+
+An asset swap packages a bond with an interest rate swap. The asset swap spread
+is the spread on the floating leg that makes the package NPV-neutral. It
+measures the bond's credit premium over the swap curve.
+
+See [AssetSwap](../../api/instruments#assetswap) API reference.
+
+### Par Asset Swap
+
+A par asset swap assumes the bond trades at par. The spread compensates for
+the difference between the bond's fixed coupons and the swap curve.
+
+```python continuation
+par_asw = AssetSwap(bond=bond, asw_type="par")
+par_spread = par_asw.rate(curves=calibrated)
+
+assert isinstance(par_spread, float)
+assert math.isfinite(par_spread)
+```
+
+### Non-Par Asset Swap
+
+A non-par (market value) asset swap uses the bond's actual dirty price rather
+than par. This adjusts the spread for the bond's premium or discount.
+
+```python continuation
+dirty = float(bond.dirty_price(calibrated, settlement=settlement))
+
+non_par_asw = AssetSwap(bond=bond, asw_type="non_par", dirty_price=dirty)
+non_par_spread = non_par_asw.rate(curves=calibrated)
+
+assert isinstance(non_par_spread, float)
+assert math.isfinite(non_par_spread)
+```
+
+## Comparing Spread Measures
+
+Different spread measures answer different questions. The Z-spread and I-spread
+use the bond's yield; asset swap spreads reflect the economics of a hedged
+position. Here they are side by side for the same bond.
+
+```python continuation
+clean = float(bond.price(calibrated, settlement=settlement))
+
+z_sprd = float(bond.z_spread(calibrated, price=clean, settlement=settlement))
+i_sprd_val = float(bond.i_spread(settlement, swap_curve))
+asw_val = float(par_asw.rate(curves=calibrated))
+
+assert isinstance(z_sprd, float)
+assert isinstance(i_sprd_val, float)
+assert isinstance(asw_val, float)
+```
+
+## Next Steps
+
+- [Callable Bonds](callable-bonds) -- Option-adjusted spread for bonds with embedded options
+- [Bonds](bonds) -- Core bond analytics and Z-spread

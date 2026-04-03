@@ -1,0 +1,14 @@
+{
+  "title": "API Reference",
+  "pages": [
+    "calendar",
+    "autodiff",
+    "numerical",
+    "curves",
+    "instruments",
+    "solver",
+    "fx",
+    "context",
+    "cashflows"
+  ]
+}

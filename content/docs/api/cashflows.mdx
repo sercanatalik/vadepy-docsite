@@ -1,0 +1,493 @@
+---
+title: "Cashflows"
+description: "Fixed and floating rate legs, period types, cashflow rows, and DataFrame conversion utilities."
+---
+
+Fixed and floating rate legs, period types, cashflow rows, and DataFrame conversion utilities.
+
+Leg types are available via flat import:
+
+```bash
+from vade import FixedLeg, FloatLeg
+from vade.cashflows import (
+    ZeroFixedLeg, ZeroFloatLeg, CustomLeg,
+    CashflowRow, cashflows_to_polars, cashflows_to_pandas,
+    FixedPeriod, FloatPeriod, IborPeriod,
+    ZeroFixedPeriod, ZeroFloatPeriod, CashflowPeriod,
+)
+```
+
+See [Conventions](../conventions) for all accepted string parameter values.
+
+**Contents:**
+[FixedLeg](#fixedleg) | [FloatLeg](#floatleg) | [ZeroFixedLeg](#zerofixedleg) | [ZeroFloatLeg](#zerofloatleg) | [CustomLeg](#customleg) | [CashflowRow](#cashflowrow) | [cashflows_to_polars](#cashflows_to_polars) | [cashflows_to_pandas](#cashflows_to_pandas) | [Period Types](#period-types)
+
+## FixedLeg
+
+Fixed-rate leg constructed from a [Schedule](calendar#schedule). _Rust-backed._
+
+### Constructor
+
+```bash
+FixedLeg(schedule, fixed_rate, notional, convention="act360", currency="USD", payment_lag=None, amortization=None)
+```
+
+### Parameters
+
+| Name           | Type                              | Default    | Description                                                                              |
+| -------------- | --------------------------------- | ---------- | ---------------------------------------------------------------------------------------- |
+| `schedule`     | `Schedule`                        | *required* | Payment schedule (from [Schedule](calendar#schedule))                                 |
+| `fixed_rate`   | `float`                           | *required* | Fixed rate in percent (e.g., 3.0 for 3%)                                                 |
+| `notional`     | `float`                           | *required* | Notional amount (negative = pay, positive = receive)                                     |
+| `convention`   | `str`                             | `"act360"` | Day count convention                                                                     |
+| `currency`     | `str`                             | `"USD"`    | Currency code                                                                            |
+| `payment_lag`  | `int \| None`                     | `None`     | Payment delay in business days                                                           |
+| `amortization` | `str \| list[float] \| None`      | `None`     | Amortization schedule: `None`, `"constant_AMOUNT"`, `"percentage_PCT"`, or list of notionals |
+
+See [Conventions](../conventions#day-count-conventions) for day count convention values.
+
+### Properties
+
+| Property     | Type  | Description        |
+| ------------ | ----- | ------------------ |
+| `.n_periods` | `int` | Number of periods  |
+
+### Methods
+
+| Method                    | Returns           | Description                                                              |
+| ------------------------- | ----------------- | ------------------------------------------------------------------------ |
+| `.npv(curve)`             | `float \| Dual`   | Net present value of all cashflows (see the [type system guide](../getting-started/type-system#union-return-types) for details on Dual return types) |
+| `.analytic_delta(curve)`  | `float \| Dual`   | Analytic delta (DV01-like sensitivity)                                   |
+| `.cashflows(curve=None)`  | `list[CashflowRow]`| Cashflow detail rows; includes notional exchanges. DF/NPV populated if curve provided |
+
+### Example
+
+```python
+import datetime
+from vade import FixedLeg, Schedule, DiscountCurve
+from vade.cashflows import cashflows_to_polars
+
+schedule = Schedule(
+    effective=datetime.date(2024, 1, 1),
+    termination=datetime.date(2025, 1, 1),
+    frequency="Q",
+)
+leg = FixedLeg(schedule, fixed_rate=3.0, notional=1_000_000.0)
+leg.n_periods  # 4
+
+rows = leg.cashflows()
+len(rows) > 0  # True
+
+nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+npv = leg.npv(curve)
+isinstance(npv, float)  # True
+
+df = cashflows_to_polars(leg.cashflows(curve))
+"Cashflow" in df.columns  # True
+"DF" in df.columns  # True
+"NPV" in df.columns  # True
+```
+
+## FloatLeg
+
+Floating-rate leg with RFR compounding constructed from a [Schedule](calendar#schedule). _Rust-backed._
+
+### Constructor
+
+```bash
+FloatLeg(
+    schedule,
+    notional,
+    calendar,
+    spread=0.0,
+    convention="act360",
+    fixing_method="rfr_payment_delay",
+    spread_method="none_simple",
+    currency="USD",
+    payment_lag=None,
+    amortization=None,
+)
+```
+
+### Parameters
+
+| Name             | Type                              | Default                | Description                                                                              |
+| ---------------- | --------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------- |
+| `schedule`       | `Schedule`                        | *required*             | Payment schedule (from [Schedule](calendar#schedule))                                 |
+| `notional`       | `float`                           | *required*             | Notional amount (negative = pay, positive = receive)                                     |
+| `calendar`       | `BusinessCalendar`                | *required*             | Business day calendar for fixing date computation                                        |
+| `spread`         | `float`                           | `0.0`                  | Spread in percent (e.g., 0.5 for 50bp)                                                  |
+| `convention`     | `str`                             | `"act360"`             | Day count convention                                                                     |
+| `fixing_method`  | `str`                             | `"rfr_payment_delay"`  | RFR fixing method (see [Conventions](../conventions))                                 |
+| `spread_method`  | `str`                             | `"none_simple"`        | Spread compounding method: `"none_simple"` or `"isda_compounding"`                       |
+| `currency`       | `str`                             | `"USD"`                | Currency code                                                                            |
+| `payment_lag`    | `int \| None`                     | `None`                 | Payment delay in business days                                                           |
+| `amortization`   | `str \| list[float] \| None`      | `None`                 | Amortization schedule                                                                    |
+
+See [BusinessCalendar](calendar#businesscalendar) for calendar construction.
+
+### Properties
+
+| Property     | Type  | Description        |
+| ------------ | ----- | ------------------ |
+| `.n_periods` | `int` | Number of periods  |
+
+### Methods
+
+| Method                              | Returns              | Description                                                                  |
+| ----------------------------------- | -------------------- | ---------------------------------------------------------------------------- |
+| `.npv(curve, fixings=None)`         | `float \| Dual`      | Net present value; pass historical fixings dict if needed                    |
+| `.analytic_delta(curve)`            | `float \| Dual`      | Analytic delta (DV01-like sensitivity)                                       |
+| `.cashflows(curve=None, fixings=None)` | `list[CashflowRow]` | Cashflow detail rows; DF/NPV populated if curve provided                  |
+
+The `fixings` parameter is a `dict[datetime.date, float]` mapping fixing dates to observed rates.
+
+### Example
+
+```python
+import datetime
+from vade import FloatLeg, Schedule, DiscountCurve, BusinessCalendar
+from vade.cashflows import cashflows_to_polars
+
+schedule = Schedule(
+    effective=datetime.date(2024, 1, 1),
+    termination=datetime.date(2025, 1, 1),
+    frequency="Q",
+)
+cal = BusinessCalendar.new_custom([], [5, 6])
+leg = FloatLeg(schedule, notional=1_000_000.0, calendar=cal, spread=0.5)
+leg.n_periods  # 4
+
+nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+npv = leg.npv(curve)
+isinstance(npv, float)  # True
+
+rows = leg.cashflows(curve)
+df = cashflows_to_polars(rows)
+"Cashflow" in df.columns  # True
+```
+
+## ZeroFixedLeg
+
+Zero-coupon fixed-rate leg with a single accrual period. _Rust-backed._
+
+### Constructor
+
+```bash
+ZeroFixedLeg(start, end, payment, fixed_rate, notional, convention="act360", currency="USD")
+```
+
+### Parameters
+
+| Name         | Type            | Default    | Description                      |
+| ------------ | --------------- | ---------- | -------------------------------- |
+| `start`      | `datetime.date` | *required* | Accrual start date               |
+| `end`        | `datetime.date` | *required* | Accrual end date                 |
+| `payment`    | `datetime.date` | *required* | Payment date                     |
+| `fixed_rate` | `float`         | *required* | Fixed rate in percent            |
+| `notional`   | `float`         | *required* | Notional amount                  |
+| `convention` | `str`           | `"act360"` | Day count convention             |
+| `currency`   | `str`           | `"USD"`    | Currency code                    |
+
+### Methods
+
+| Method                    | Returns              | Description                                   |
+| ------------------------- | -------------------- | --------------------------------------------- |
+| `.npv(curve)`             | `float \| Dual`      | Net present value                             |
+| `.analytic_delta(curve)`  | `float \| Dual`      | Analytic delta                                |
+| `.cashflows(curve=None)`  | `list[CashflowRow]`  | Cashflow detail rows                          |
+
+### Example
+
+```python
+import datetime
+from vade.cashflows import ZeroFixedLeg
+
+leg = ZeroFixedLeg(
+    start=datetime.date(2024, 1, 1),
+    end=datetime.date(2025, 1, 1),
+    payment=datetime.date(2025, 1, 1),
+    fixed_rate=3.0,
+    notional=1_000_000.0,
+)
+rows = leg.cashflows()
+len(rows) > 0  # True
+```
+
+## ZeroFloatLeg
+
+Zero-coupon floating-rate leg with RFR compounding. _Rust-backed._
+
+### Constructor
+
+```bash
+ZeroFloatLeg(
+    start, end, payment, notional, calendar,
+    spread=0.0, convention="act360",
+    fixing_method="rfr_payment_delay", spread_method="none_simple",
+    currency="USD",
+)
+```
+
+### Parameters
+
+| Name            | Type               | Default                | Description                                            |
+| --------------- | ------------------ | ---------------------- | ------------------------------------------------------ |
+| `start`         | `datetime.date`    | *required*             | Accrual start date                                     |
+| `end`           | `datetime.date`    | *required*             | Accrual end date                                       |
+| `payment`       | `datetime.date`    | *required*             | Payment date                                           |
+| `notional`      | `float`            | *required*             | Notional amount                                        |
+| `calendar`      | `BusinessCalendar` | *required*             | Business day calendar for fixing dates                 |
+| `spread`        | `float`            | `0.0`                  | Spread in percent                                      |
+| `convention`    | `str`              | `"act360"`             | Day count convention                                   |
+| `fixing_method` | `str`              | `"rfr_payment_delay"`  | RFR fixing method                                      |
+| `spread_method` | `str`              | `"none_simple"`        | Spread compounding method                              |
+| `currency`      | `str`              | `"USD"`                | Currency code                                          |
+
+### Methods
+
+| Method                                 | Returns              | Description                                   |
+| -------------------------------------- | -------------------- | --------------------------------------------- |
+| `.npv(curve, fixings=None)`            | `float \| Dual`      | Net present value                             |
+| `.analytic_delta(curve)`               | `float \| Dual`      | Analytic delta                                |
+| `.cashflows(curve=None, fixings=None)` | `list[CashflowRow]`  | Cashflow detail rows                          |
+
+### Example
+
+```python
+import datetime
+from vade import BusinessCalendar
+from vade.cashflows import ZeroFloatLeg
+
+cal = BusinessCalendar.new_custom([], [5, 6])
+leg = ZeroFloatLeg(
+    start=datetime.date(2024, 1, 1),
+    end=datetime.date(2025, 1, 1),
+    payment=datetime.date(2025, 1, 1),
+    notional=1_000_000.0,
+    calendar=cal,
+)
+rows = leg.cashflows()
+len(rows) > 0  # True
+```
+
+## CustomLeg
+
+Leg with arbitrary heterogeneous period types. _Rust-backed._
+
+### Constructor
+
+```bash
+CustomLeg(periods, currency="USD")
+```
+
+### Parameters
+
+| Name       | Type                                                                                     | Default    | Description                         |
+| ---------- | ---------------------------------------------------------------------------------------- | ---------- | ----------------------------------- |
+| `periods`  | `list[FixedPeriod \| FloatPeriod \| IborPeriod \| ZeroFixedPeriod \| ZeroFloatPeriod \| CashflowPeriod]` | *required* | Heterogeneous list of period objects |
+| `currency` | `str`                                                                                    | `"USD"`    | Currency code                       |
+
+### Properties
+
+| Property     | Type  | Description        |
+| ------------ | ----- | ------------------ |
+| `.n_periods` | `int` | Number of periods  |
+
+### Methods
+
+| Method                                 | Returns              | Description                                   |
+| -------------------------------------- | -------------------- | --------------------------------------------- |
+| `.npv(curve, fixings=None)`            | `float \| Dual`      | Net present value                             |
+| `.analytic_delta(curve)`               | `float \| Dual`      | Analytic delta                                |
+| `.cashflows(curve=None, fixings=None)` | `list[CashflowRow]`  | Cashflow detail rows                          |
+
+### Example
+
+```python
+import datetime
+from vade.cashflows import CustomLeg, FixedPeriod, CashflowPeriod
+
+fp = FixedPeriod(
+    start=datetime.date(2024, 1, 1),
+    end=datetime.date(2024, 7, 1),
+    payment=datetime.date(2024, 7, 1),
+    notional=1_000_000.0,
+    fixed_rate=3.0,
+)
+cp = CashflowPeriod(
+    payment=datetime.date(2025, 1, 1),
+    notional=-1_000_000.0,
+)
+leg = CustomLeg(periods=[fp, cp])
+leg.n_periods  # 2
+
+rows = leg.cashflows()
+len(rows)  # 2
+```
+
+## CashflowRow
+
+A single row of cashflow data returned by leg `.cashflows()` methods. _Rust-backed._
+
+Not constructed directly -- returned by `FixedLeg.cashflows()`, `FloatLeg.cashflows()`, and other leg types.
+
+### Properties
+
+| Property       | Type                              | Description                                          |
+| -------------- | --------------------------------- | ---------------------------------------------------- |
+| `.period_type` | `str`                             | Period type identifier (e.g., `"Fixed"`, `"Float"`, `"Cashflow"`) |
+| `.start`       | `datetime.date`                   | Accrual start date                                   |
+| `.end`         | `datetime.date`                   | Accrual end date                                     |
+| `.payment`     | `datetime.date`                   | Payment date                                         |
+| `.currency`    | `str`                             | Currency code                                        |
+| `.notional`    | `float`                           | Period notional                                      |
+| `.fixing_rate` | `float \| Dual \| Dual2 \| None`  | Observed/projected fixing rate                       |
+| `.rate`        | `float`                           | Effective rate for the period                        |
+| `.spread`      | `float`                           | Spread applied                                       |
+| `.dcf`         | `float`                           | Day count fraction                                   |
+| `.cashflow`    | `float \| Dual \| Dual2`          | Period cashflow amount                               |
+| `.df`          | `float \| Dual \| Dual2 \| None`  | Discount factor (None if no curve provided)          |
+| `.npv`         | `float \| Dual \| Dual2 \| None`  | Discounted cashflow (None if no curve provided)      |
+
+See [Dual](autodiff#dual) and [Dual2](autodiff#dual2) for automatic differentiation types.
+
+### Example
+
+```python
+import datetime
+from vade import FixedLeg, Schedule
+
+schedule = Schedule(
+    effective=datetime.date(2024, 1, 1),
+    termination=datetime.date(2025, 1, 1),
+    frequency="Q",
+)
+leg = FixedLeg(schedule, fixed_rate=3.0, notional=1_000_000.0)
+rows = leg.cashflows()
+
+# Examine a fixed-rate period (skip initial notional exchange)
+fixed_rows = [r for r in rows if r.period_type == "Fixed"]
+row = fixed_rows[0]
+row.period_type  # 'Fixed'
+isinstance(row.start, datetime.date)  # True
+isinstance(row.end, datetime.date)  # True
+row.rate  # 0.03
+row.dcf > 0  # True
+isinstance(row.cashflow, float)  # True
+row.df is None  # True (no curve provided)
+row.npv is None  # True (no curve provided)
+```
+
+## cashflows_to_polars
+
+Convert a list of [CashflowRow](#cashflowrow) to a Polars DataFrame.
+
+```bash
+cashflows_to_polars(rows: list[CashflowRow]) -> polars.DataFrame
+```
+
+### Parameters
+
+| Name   | Type               | Default    | Description            |
+| ------ | ------------------ | ---------- | ---------------------- |
+| `rows` | `list[CashflowRow]`| *required* | Cashflow rows from any leg's `.cashflows()` method |
+
+### DataFrame Columns
+
+| Column        | Type    | Description                                   |
+| ------------- | ------- | --------------------------------------------- |
+| `Type`        | `str`   | Period type (`"Fixed"`, `"Float"`, `"Cashflow"`, etc.) |
+| `start`       | `date`  | Accrual start date                            |
+| `end`         | `date`  | Accrual end date                              |
+| `payment`     | `date`  | Payment date                                  |
+| `Ccy`         | `str`   | Currency code                                 |
+| `Notional`    | `f64`   | Period notional                               |
+| `fixing_rate` | `f64`   | Fixing rate (null if not applicable)          |
+| `Rate`        | `f64`   | Effective rate                                |
+| `Spread`      | `f64`   | Spread                                        |
+| `DCF`         | `f64`   | Day count fraction                            |
+| `Cashflow`    | `f64`   | Cashflow amount                               |
+| `DF`          | `f64`   | Discount factor (only if curve was provided)  |
+| `NPV`         | `f64`   | Discounted cashflow (only if curve was provided) |
+
+### Example
+
+```python
+import datetime
+from vade import FixedLeg, Schedule, DiscountCurve
+from vade.cashflows import cashflows_to_polars
+
+schedule = Schedule(
+    effective=datetime.date(2024, 1, 1),
+    termination=datetime.date(2025, 1, 1),
+    frequency="Q",
+)
+leg = FixedLeg(schedule, fixed_rate=3.0, notional=1_000_000.0)
+
+# Without curve: 11 columns
+rows = leg.cashflows()
+df = cashflows_to_polars(rows)
+len(df.columns)  # 11
+"Cashflow" in df.columns  # True
+
+# With curve: 13 columns (adds DF, NPV)
+nodes = {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97}
+curve = DiscountCurve(nodes, interpolation="log_linear", convention="act365f")
+rows_with_curve = leg.cashflows(curve)
+df2 = cashflows_to_polars(rows_with_curve)
+len(df2.columns)  # 13
+"DF" in df2.columns  # True
+"NPV" in df2.columns  # True
+```
+
+## cashflows_to_pandas
+
+Convert a list of [CashflowRow](#cashflowrow) to a pandas DataFrame. Same columns as [`cashflows_to_polars`](#cashflows_to_polars).
+
+```bash
+cashflows_to_pandas(rows: list[CashflowRow]) -> pandas.DataFrame
+```
+
+### Parameters
+
+| Name   | Type               | Default    | Description            |
+| ------ | ------------------ | ---------- | ---------------------- |
+| `rows` | `list[CashflowRow]`| *required* | Cashflow rows from any leg's `.cashflows()` method |
+
+### Example
+
+```python
+import datetime
+from vade import FixedLeg, Schedule
+from vade.cashflows import cashflows_to_pandas
+
+schedule = Schedule(
+    effective=datetime.date(2024, 1, 1),
+    termination=datetime.date(2025, 1, 1),
+    frequency="Q",
+)
+leg = FixedLeg(schedule, fixed_rate=3.0, notional=1_000_000.0)
+rows = leg.cashflows()
+df = cashflows_to_pandas(rows)
+"Cashflow" in df.columns  # True
+```
+
+## Period Types
+
+Low-level accrual period building blocks. Rarely constructed directly -- legs create these internally.
+
+| Type              | Description                      | Key Parameters                                                                  |
+| ----------------- | -------------------------------- | ------------------------------------------------------------------------------- |
+| `FixedPeriod`     | Fixed-rate accrual period        | start, end, payment, notional, fixed_rate, convention                           |
+| `FloatPeriod`     | RFR floating-rate period         | start, end, payment, notional, calendar, spread, convention, fixing_method, spread_method |
+| `IborPeriod`      | IBOR fixing period               | start, end, payment, notional, calendar, spread, convention, fixing_lag         |
+| `ZeroFixedPeriod` | Zero-coupon fixed period         | start, end, payment, notional, fixed_rate, convention                           |
+| `ZeroFloatPeriod` | Zero-coupon floating period      | start, end, payment, notional, calendar, spread, convention, fixing_method, spread_method |
+| `CashflowPeriod`  | Simple notional exchange or fee  | payment, notional, currency                                                     |
+
+All period types have `.npv(curve)` method. Float and IBOR periods also accept a `fixings` parameter. `FixedPeriod` and `ZeroFixedPeriod` also have `.cashflow()` returning the undiscounted cashflow amount.
+
+Period types are used with [CustomLeg](#customleg) when you need heterogeneous periods in a single leg.

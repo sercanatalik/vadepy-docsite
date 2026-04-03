@@ -1,0 +1,54 @@
+---
+title: "Credit Curves & CDS"
+description: "Model default risk with [CreditImpliedCurve](../../api/curves.md#creditimpliedcurve)"
+---
+
+Model default risk with [CreditImpliedCurve](../../api/curves#creditimpliedcurve)
+using piecewise flat hazard rates, and price credit protection with
+[CDS](../../api/instruments#cds) instruments against risk-free discount and
+credit curves.
+
+---
+
+## Credit Curves
+
+A [CreditImpliedCurve](../../api/curves#creditimpliedcurve) models default risk
+through piecewise flat hazard rates. Nodes map dates to hazard rate levels, and
+the curve computes survival probabilities -- the likelihood that the reference
+entity has not defaulted by a given date. The
+[act360](../../conventions#day-count-conventions) convention is standard for
+credit markets.
+
+```python
+credit_curve.survival_probability(datetime.date(2027, 6, 16))  # 0.9779413739743786
+credit_curve.survival_probability(datetime.date(2030, 6, 16))  # 0.9371403492367462
+```
+
+## CDS Pricing
+
+A [CDS](../../api/instruments#cds) (Credit Default Swap) provides protection
+against default. The buyer pays a quarterly fixed premium (in basis points) and
+receives a payout if the reference entity defaults. Pricing requires two curves:
+a risk-free discount curve and a credit curve. Note that `fixed_rate` is in
+basis points -- 100.0 means 100bp (1%).
+
+```python continuation
+cds = CDS(
+    effective=effective,
+    termination="5y",
+    frequency="q",
+    fixed_rate=100.0,
+    recovery_rate=0.4,
+    convention="act360",
+    notional=10_000_000.0,
+)
+
+float(cds.npv(disc_curve, credit_curve))     # -105585.47418774274
+float(cds.rate(disc_curve, credit_curve))    # 76.38869933298339
+float(cds.spread(disc_curve, credit_curve))  # -23.611300667016607
+```
+
+## Next Steps
+
+- [Bonds](bonds) -- Settlement-aware bond analytics, duration, convexity, and spread measures
+- [Spread Analytics](spread-analytics) -- Interpolated swap spreads (I-spread) and asset swap analysis
