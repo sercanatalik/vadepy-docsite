@@ -1,4 +1,5 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+import { BotIcon } from 'lucide-react';
 import { gitConfig } from './shared';
 
 export function baseOptions(): BaseLayoutProps {
@@ -24,6 +25,14 @@ export function baseOptions(): BaseLayoutProps {
       {
         text: 'API',
         url: '/docs/api',
+      },
+      {
+        type: 'icon',
+        text: 'llms.txt',
+        label: 'llms.txt',
+        url: 'https://vadepy.dev/llms-full.txt',
+        icon: <BotIcon />,
+        external: true,
       },
     ],
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
