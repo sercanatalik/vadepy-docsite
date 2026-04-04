@@ -16,32 +16,42 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import HeroSection from "@/components/hero-section";
 
-const CODE_SNIPPET = `import datetime as dt
-from vade import DiscountCurve, IRS, Solver
-
-# Build a SOFR discount curve
-nodes = {
-    dt.date(2025, 6, 16): 1.0,
-    dt.date(2026, 6, 16): 1.0,   # 1Y
-    dt.date(2027, 6, 16): 1.0,   # 2Y
-    dt.date(2030, 6, 16): 1.0,   # 5Y
-    dt.date(2035, 6, 16): 1.0,   # 10Y
+function ColoredCode() {
+  const kw = "text-primary";
+  const cm = "text-muted-foreground";
+  const str = "text-emerald-300";
+  const num = "text-amber-300";
+  return (
+    <code className="text-foreground">
+      <span className={kw}>import</span> datetime <span className={kw}>as</span> dt{"\n"}
+      <span className={kw}>from</span> vade <span className={kw}>import</span> DiscountCurve, IRS, Solver{"\n"}
+      {"\n"}
+      <span className={cm}># Build a SOFR discount curve</span>{"\n"}
+      nodes = {"{"}{"\n"}
+      {"    "}dt.date(<span className={num}>2025</span>, <span className={num}>6</span>, <span className={num}>16</span>): <span className={num}>1.0</span>,{"\n"}
+      {"    "}dt.date(<span className={num}>2026</span>, <span className={num}>6</span>, <span className={num}>16</span>): <span className={num}>1.0</span>,   <span className={cm}># 1Y</span>{"\n"}
+      {"    "}dt.date(<span className={num}>2027</span>, <span className={num}>6</span>, <span className={num}>16</span>): <span className={num}>1.0</span>,   <span className={cm}># 2Y</span>{"\n"}
+      {"    "}dt.date(<span className={num}>2030</span>, <span className={num}>6</span>, <span className={num}>16</span>): <span className={num}>1.0</span>,   <span className={cm}># 5Y</span>{"\n"}
+      {"    "}dt.date(<span className={num}>2035</span>, <span className={num}>6</span>, <span className={num}>16</span>): <span className={num}>1.0</span>,   <span className={cm}># 10Y</span>{"\n"}
+      {"}"}{"\n"}
+      {"\n"}
+      curve = DiscountCurve(nodes, interpolation=<span className={str}>"log_linear"</span>){"\n"}
+      {"\n"}
+      <span className={cm}># Calibrate to market instruments</span>{"\n"}
+      irs_2y = IRS(effective=dt.date(<span className={num}>2025</span>, <span className={num}>6</span>, <span className={num}>16</span>),{"\n"}
+      {"             "}termination=<span className={str}>"2Y"</span>, fixed_rate=<span className={num}>3.85</span>){"\n"}
+      {"\n"}
+      solver = Solver(curves=[curve], instruments=[{"\n"}
+      {"    "}(irs_2y, <span className={num}>3.85</span>, <span className={num}>0</span>, <span className={str}>"2Y_IRS"</span>, <span className={str}>"USD"</span>),{"\n"}
+      ]){"\n"}
+      result = solver.iterate(){"\n"}
+      <span className={kw}>assert</span> result.converged  <span className={cm}># True</span>{"\n"}
+      {"\n"}
+      <span className={cm}># Compute delta risk via automatic differentiation</span>{"\n"}
+      delta = solver.delta(irs_2y, result)
+    </code>
+  );
 }
-
-curve = DiscountCurve(nodes, interpolation="log_linear")
-
-# Calibrate to market instruments
-irs_2y = IRS(effective=dt.date(2025, 6, 16),
-             termination="2Y", fixed_rate=3.85)
-
-solver = Solver(curves=[curve], instruments=[
-    (irs_2y, 3.85, 0, "2Y_IRS", "USD"),
-])
-result = solver.iterate()
-assert result.converged  # True
-
-# Compute delta risk via automatic differentiation
-delta = solver.delta(irs_2y, result)`;
 
 function FeatureItem({
   icon,
@@ -74,7 +84,7 @@ export default function HomePage() {
 
         {/* Code Showcase */}
         <section className="py-24">
-          <div className="container mx-auto px-6">
+          <div className="mx-auto max-w-[1400px] px-6">
             <div className="mb-16 text-center">
               <Badge variant="outline" className="mb-4 border-primary/30 bg-primary/5 text-primary">
                 Developer Experience
@@ -99,8 +109,8 @@ export default function HomePage() {
                   <span className="ml-2 font-mono text-xs text-muted-foreground">quick_start.py</span>
                 </div>
                 <CardContent className="p-0">
-                  <pre className="overflow-x-auto p-6 font-mono text-sm leading-relaxed text-foreground">
-                    <code>{CODE_SNIPPET}</code>
+                  <pre className="overflow-x-auto p-6 font-mono text-sm leading-relaxed">
+                    <ColoredCode />
                   </pre>
                 </CardContent>
               </Card>
@@ -144,7 +154,7 @@ export default function HomePage() {
 
         {/* Features Grid */}
         <section className="bg-secondary/20 py-24">
-          <div className="container mx-auto px-6">
+          <div className="mx-auto max-w-[1400px] px-6">
             <div className="mb-16 text-center">
               <Badge variant="outline" className="mb-4 border-primary/30 bg-primary/5 text-primary">
                 Capabilities
@@ -198,7 +208,7 @@ export default function HomePage() {
 
         {/* CTA Section */}
         <section className="py-24">
-          <div className="container mx-auto px-6">
+          <div className="mx-auto max-w-[1400px] px-6">
             <div className="relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent p-12 md:p-16">
               {/* Background glow */}
               <div className="absolute right-0 top-0 size-96 rounded-full bg-primary/20 blur-[100px]" />
@@ -232,11 +242,13 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="border-t border-border py-12">
-        <div className="container mx-auto px-6">
+        <div className="mx-auto max-w-[1400px] px-6">
           <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-foreground">Vade</span>
-              <span className="font-semibold text-primary">Py</span>
+                <span className="flex items-baseline gap-0 text-lg font-extrabold tracking-tight">
+          <span>Vade</span>
+          <span className="text-primary text-xl">Py</span>
+        </span>
               <span className="ml-4 text-sm text-muted-foreground">
                 AI-ready quantitative analytics for Python
               </span>

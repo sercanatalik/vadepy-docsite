@@ -3,6 +3,7 @@ import { gitConfig } from './shared';
 
 export function baseOptions(): BaseLayoutProps {
   return {
+    themeSwitch: { enabled: false },
     nav: {
       title: (
      <span className="flex items-baseline gap-0 text-lg font-extrabold tracking-tight">
