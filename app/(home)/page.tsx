@@ -1,6 +1,8 @@
 import {
   ArrowRight,
   Activity,
+  Check,
+  Clock,
   Code2,
   Cpu,
   FileJson,
@@ -202,6 +204,126 @@ export default function HomePage() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Roadmap Progress */}
+        <section className="py-24">
+          <div className="mx-auto max-w-[1400px] px-6">
+            <div className="mb-16 text-center">
+              <Badge variant="outline" className="mb-4 border-primary/30 bg-primary/5 text-primary">
+                Roadmap
+              </Badge>
+              <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
+                Broad coverage, actively growing
+              </h2>
+              <p className="mx-auto max-w-2xl text-muted-foreground text-pretty">
+                30+ instruments and analytics shipped across four asset classes. Swaptions, FX options, financing,
+                portfolio risk, and AI integration are next.
+              </p>
+            </div>
+
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                {
+                  name: "Rates",
+                  pct: 86,
+                  done: [
+                    "Interest Rate Swaps (IRS, FRA, ZCS, OIS, SBS)",
+                    "Deposits & Futures",
+                    "Caps & Floors (Black-76 / Bachelier)",
+                    "Discount, Forward & Parametric Curves",
+                    "Composite & Spread Curves",
+                    "Multi-Curve Bootstrap & Calibration",
+                    "Bucket-Level Risk Analytics",
+                  ],
+                  next: ["Swaptions", "Bond Futures"],
+                },
+                {
+                  name: "Credit",
+                  pct: 80,
+                  done: [
+                    "Fixed Rate Bonds & Bills",
+                    "Floating Rate Notes (FRN, Sub-Period, Capped)",
+                    "Structured Bonds (Zero, Step-Up, Amortizing, PIK)",
+                    "Callable Bonds (Hull-White lattice, OAS)",
+                    "Credit Default Swaps & Hazard Curves",
+                    "Asset Swap Spreads",
+                    "Fitted Bond Curves (NS/NSS/Smith-Wilson)",
+                  ],
+                  next: ["Credit Linked Notes", "CLOs/ABS"],
+                },
+                {
+                  name: "FX",
+                  pct: 71,
+                  done: [
+                    "FX Rates with BFS Triangulation",
+                    "FX Forwards & Forward Points",
+                    "Cross-Currency Swaps (MTM/non-MTM)",
+                    "Non-Deliverable Instruments (NDF, NDIRS, NDXCS)",
+                    "FX Implied Discount Curves",
+                  ],
+                  next: ["FX Options & Vol Surface", "Exotic Barriers & Digitals"],
+                },
+                {
+                  name: "Financing",
+                  pct: 0,
+                  done: [],
+                  next: [
+                    "Repo & Reverse Repo",
+                    "Securities Lending",
+                    "Total Return Swaps",
+                    "Syndicated & Bilateral Loans",
+                    "Bond Forwards",
+                  ],
+                },
+              ].map((cat) => (
+                <Card key={cat.name} className="border-border bg-card">
+                  <CardContent className="p-6">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-foreground">{cat.name}</h3>
+                      <span className="text-2xl font-bold text-primary">{cat.pct}%</span>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="mb-5 h-2 overflow-hidden rounded-full bg-secondary">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all"
+                        style={{ width: `${cat.pct}%` }}
+                      />
+                    </div>
+                    <ul className="space-y-2 text-sm">
+                      {cat.done.map((item) => (
+                        <li key={item} className="flex items-start gap-2 text-muted-foreground">
+                          <Check className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                      {cat.next.length > 0 && (
+                        <li className="mt-3 border-t border-border pt-3 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
+                          Coming next
+                        </li>
+                      )}
+                      {cat.next.map((item) => (
+                        <li key={item} className="flex items-start gap-2 text-muted-foreground/60">
+                          <Clock className="mt-0.5 size-3.5 shrink-0" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="mt-10 text-center">
+              <Link
+                href="/docs/roadmap"
+                className="inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary/80"
+              >
+                View Full Roadmap
+                <ArrowRight className="size-4" />
+              </Link>
             </div>
           </div>
         </section>
