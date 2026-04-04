@@ -1,4 +1,4 @@
-import type { LoaderOutput } from 'fumadocs-core/source';
+import type { LoaderConfig, LoaderOutput } from 'fumadocs-core/source';
 import type { InferPageType } from 'fumadocs-core/source';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 import type { ComponentProps, FC } from 'react';
@@ -15,7 +15,7 @@ const Link = defaultMdxComponents.a;
  * Fix: Detect when on an index page and rewrite relative ./href and ../href links
  * by prepending the directory segment, so the browser resolves them correctly.
  */
-export function createIndexAwareLink<C extends Record<string, unknown>>(
+export function createIndexAwareLink<C extends LoaderConfig>(
   source: LoaderOutput<C>,
   page: InferPageType<LoaderOutput<C>>,
 ): FC<ComponentProps<'a'>> {
