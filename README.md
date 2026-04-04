@@ -4,6 +4,7 @@ Documentation website for [Vade](https://github.com/sercanatalik/vade) -- a prod
 **Documentation website:** [vadepy.dev](https://vadepy.dev)
 
 
+
 ## Tech Stack
 
 - **Next.js 16** with static export
