@@ -1,173 +1,20 @@
 import {
   ArrowRight,
-  BookOpen,
-  Bot,
-  BrainCircuit,
-  ChevronRight,
+  Activity,
   Code2,
   Cpu,
-  FlaskConical,
+  FileJson,
   GitBranch,
+  Layers,
   LineChart,
+  Map,
   Shield,
-  Sigma,
-  TrendingUp,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardContent } from "@/components/ui/card";
 import HeroSection from "@/components/hero-section";
-
-const FEATURES = [
-  {
-    icon: Cpu,
-    title: "Rust-Powered Core",
-    description:
-      "All computation — curve interpolation, AD propagation, solver calibration — runs in compiled Rust via PyO3. Zero Python overhead in the inner loops.",
-  },
-  {
-    icon: Sigma,
-    title: "Automatic Differentiation",
-    description:
-      "Dual and Dual2 types propagate first- and second-order derivatives through every operation. Delta and gamma risk fall out naturally — no finite differences.",
-  },
-  {
-    icon: LineChart,
-    title: "Multi-Curve Calibration",
-    description:
-      "Jacobian-based Solver calibrates discount, forward, and spread curves simultaneously to FRAs, IRS, OIS, bonds, CDS, and more.",
-  },
-  {
-    icon: FlaskConical,
-    title: "Rates, Credit & FX",
-    description:
-      "IRS, bonds, callable bonds, CDS, XCS, caps, floors, NDFs, FX forwards — full fixed income coverage modelled in Rust, exposed to Python.",
-  },
-  {
-    icon: GitBranch,
-    title: "Curve Flexibility",
-    description:
-      "Discount, forward, composite, and spread curves. 10+ interpolation schemes. Nelson-Siegel, Svensson, Smith-Wilson parametric models.",
-  },
-  {
-    icon: BrainCircuit,
-    title: "AI-Ready Architecture",
-    description:
-      "JSON-serializable objects, structured outputs, and an MCP server on the roadmap — designed for LLM agents to build, price, and analyze.",
-  },
-];
-
-const ASSET_CLASSES = [
-  {
-    title: "Rates",
-    href: "/docs/guides/rates",
-    shipped: 12,
-    items: [
-      "Interest Rate Swaps (IRS, FRA, ZCS, OIS, SBS)",
-      "Deposits & Futures",
-      "Caps & Floors (Black-76 / Bachelier)",
-      "Discount, Forward & Parametric Curves",
-      "Composite & Spread Curves",
-      "Multi-Curve Bootstrap & Calibration",
-      "Bucket-Level Risk Analytics",
-    ],
-    planned: ["Swaptions", "Bond Futures"],
-  },
-  {
-    title: "Credit",
-    href: "/docs/guides/credit",
-    shipped: 8,
-    items: [
-      "Fixed Rate Bonds & Bills",
-      "Floating Rate Notes (FRN, Sub-Period, Capped)",
-      "Structured Bonds (Zero, Step-Up, Amortizing, PIK)",
-      "Callable Bonds (Hull-White lattice, OAS)",
-      "Credit Default Swaps & Hazard Curves",
-      "Asset Swap Spreads",
-      "Fitted Bond Curves (NS/NSS/Smith-Wilson)",
-    ],
-    planned: ["Credit Linked Notes", "CLOs/ABS"],
-  },
-  {
-    title: "FX",
-    href: "/docs/guides/fx",
-    shipped: 5,
-    items: [
-      "FX Rates with BFS Triangulation",
-      "FX Forwards & Forward Points",
-      "Cross-Currency Swaps (MTM/non-MTM)",
-      "Non-Deliverable Instruments (NDF, NDIRS, NDXCS)",
-      "FX Implied Discount Curves",
-    ],
-    planned: ["FX Options & Vol Surface", "Exotic Barriers & Digitals"],
-  },
-  {
-    title: "Financing",
-    href: "/docs/roadmap",
-    shipped: 0,
-    items: [],
-    planned: [
-      "Repo & Reverse Repo",
-      "Securities Lending",
-      "Total Return Swaps",
-      "Syndicated & Bilateral Loans",
-      "Bond Forwards",
-    ],
-  },
-];
-
-const AI_FEATURES = [
-  {
-    icon: Bot,
-    title: "MCP Server",
-    status: "Planned",
-    description:
-      "Model Context Protocol server exposing curve construction, pricing, risk analytics, and market data as tool endpoints for LLM agents.",
-  },
-  {
-    icon: BrainCircuit,
-    title: "Agentic Workflows",
-    status: "Planned",
-    description:
-      "Natural language-driven curve building, trade pricing, scenario analysis, and risk reporting through multi-step tool-use chains.",
-  },
-  {
-    icon: Shield,
-    title: "Structured Outputs",
-    status: "Available",
-    description:
-      "Full JSON serialization across curves, instruments, and MarketContext. Every object round-trips cleanly — ready for agent consumption.",
-  },
-];
-
-const DOC_SECTIONS = [
-  {
-    href: "/docs/getting-started/installation",
-    label: "Installation",
-    description: "Install vade and verify your setup",
-    icon: Code2,
-  },
-  {
-    href: "/docs/getting-started/architecture",
-    label: "Architecture",
-    description: "Rust core, PyO3 bindings, max-Rust philosophy",
-    icon: Cpu,
-  },
-  {
-    href: "/docs/guides/quick-start",
-    label: "Quick Start",
-    description: "Build a curve, calibrate, price, and compute risk",
-    icon: ArrowRight,
-  },
-  {
-    href: "/docs/api",
-    label: "API Reference",
-    description: "Complete signatures and working examples",
-    icon: BookOpen,
-  },
-];
 
 const CODE_SNIPPET = `import datetime as dt
 from vade import DiscountCurve, IRS, Solver
@@ -196,14 +43,24 @@ assert result.converged  # True
 # Compute delta risk via automatic differentiation
 delta = solver.delta(irs_2y, result)`;
 
-function ProgressBar({ shipped, total }: { shipped: number; total: number }) {
-  const pct = Math.round((shipped / total) * 100);
+function FeatureItem({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
   return (
-    <div className="flex items-center gap-3">
-      <div className="bg-muted h-2 flex-1 overflow-hidden rounded-full">
-        <div className="bg-primary h-full rounded-full transition-all" style={{ width: `${pct}%` }} />
+    <div className="flex gap-4 rounded-xl border border-border/50 bg-secondary/30 p-4 transition-colors hover:border-primary/30">
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        {icon}
       </div>
-      <span className="text-muted-foreground text-xs font-medium tabular-nums">{pct}%</span>
+      <div>
+        <h3 className="mb-1 font-semibold text-foreground">{title}</h3>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
     </div>
   );
 }
@@ -215,281 +72,192 @@ export default function HomePage() {
         {/* Hero */}
         <HeroSection />
 
-        {/* Features */}
-        <section className="mx-auto max-w-6xl px-6 py-24">
-          <div className="mb-12 text-center">
-            <Badge variant="outline" className="mb-4">
-              Built for production quant workflows
-            </Badge>
-            <h2 className="text-3xl font-bold tracking-tight">
-              Institutional-grade fixed income analytics
-            </h2>
-            <p className="text-muted-foreground mx-auto mt-3 max-w-2xl text-base">
-              From curve construction to exotic instrument pricing and risk — across rates, credit, FX, and financing — vade
-              handles it at native Rust speed with first-class AI agent support.
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f) => (
-              <Card key={f.title} className="group border-border/60 hover:border-border transition-colors">
-                <CardHeader className="pb-3">
-                  <div className="bg-primary/10 text-primary mb-3 flex size-9 items-center justify-center rounded-md">
-                    <f.icon className="size-4" />
+        {/* Code Showcase */}
+        <section className="py-24">
+          <div className="container mx-auto px-6">
+            <div className="mb-16 text-center">
+              <Badge variant="outline" className="mb-4 border-primary/30 bg-primary/5 text-primary">
+                Developer Experience
+              </Badge>
+              <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
+                Intuitive API, blazing fast execution
+              </h2>
+              <p className="mx-auto max-w-2xl text-muted-foreground text-pretty">
+                Write Python code that feels natural while Rust handles the heavy lifting under the hood.
+              </p>
+            </div>
+
+            <div className="grid gap-8 lg:grid-cols-2">
+              {/* Code example */}
+              <Card className="overflow-hidden border-border bg-card">
+                <div className="flex items-center gap-2 border-b border-border bg-secondary/50 px-4 py-3">
+                  <div className="flex gap-1.5">
+                    <div className="size-3 rounded-full bg-red-500/60" />
+                    <div className="size-3 rounded-full bg-yellow-500/60" />
+                    <div className="size-3 rounded-full bg-green-500/60" />
                   </div>
-                  <CardTitle className="text-base">{f.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-sm leading-relaxed">{f.description}</CardDescription>
+                  <span className="ml-2 font-mono text-xs text-muted-foreground">quick_start.py</span>
+                </div>
+                <CardContent className="p-0">
+                  <pre className="overflow-x-auto p-6 font-mono text-sm leading-relaxed text-foreground">
+                    <code>{CODE_SNIPPET}</code>
+                  </pre>
                 </CardContent>
               </Card>
-            ))}
+
+              {/* Features list */}
+              <div className="space-y-6">
+                <FeatureItem
+                  icon={<Zap className="size-5" />}
+                  title="Sub-millisecond pricing"
+                  description="Rust-powered core delivers institutional-grade performance for real-time applications. Zero Python overhead in the inner loops."
+                />
+                <FeatureItem
+                  icon={<Code2 className="size-5" />}
+                  title="Pythonic API"
+                  description="Clean, intuitive interface that feels natural to quants and data scientists. Full IDE support via PyO3 type stubs."
+                />
+                <FeatureItem
+                  icon={<Cpu className="size-5" />}
+                  title="Automatic differentiation"
+                  description="Dual and Dual2 types propagate first- and second-order derivatives through every operation. Greeks computed in one forward pass."
+                />
+                <FeatureItem
+                  icon={<Activity className="size-5" />}
+                  title="MCP-ready"
+                  description="JSON-serializable objects and structured outputs — designed for LLM agent workflows with Model Context Protocol support."
+                />
+                <FeatureItem
+                  icon={<Map className="size-5" />}
+                  title="Multi-curve framework"
+                  description="Discount, forward, composite, and spread curves calibrated simultaneously. Single solver handles cross-dependencies across the entire curve set."
+                />
+                <FeatureItem
+                  icon={<FileJson className="size-5" />}
+                  title="Full serialization"
+                  description="Every curve, instrument, and Solver state round-trips through JSON via to_json() and from_json(). Persist, transmit, and debug any object."
+                />
+              </div>
+            </div>
           </div>
         </section>
 
-        <Separator />
-
-        {/* AI-Ready Section */}
-        <section className="bg-muted/30 py-24">
-          <div className="mx-auto max-w-6xl px-6">
-            <div className="mb-12 text-center">
-              <Badge variant="outline" className="mb-4">
-                Designed for AI agents
+        {/* Features Grid */}
+        <section className="bg-secondary/20 py-24">
+          <div className="container mx-auto px-6">
+            <div className="mb-16 text-center">
+              <Badge variant="outline" className="mb-4 border-primary/30 bg-primary/5 text-primary">
+                Capabilities
               </Badge>
-              <h2 className="text-3xl font-bold tracking-tight">The quant library that AI agents can use</h2>
-              <p className="text-muted-foreground mx-auto mt-3 max-w-2xl text-base">
-                Vade is built from day one with structured, serializable outputs and a clean tool interface — so LLM
-                agents can build curves, price trades, and run risk just like a human quant.
+              <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
+                Everything you need for quantitative finance
+              </h2>
+              <p className="mx-auto max-w-2xl text-muted-foreground text-pretty">
+                A comprehensive toolkit designed by quants, for quants — with the performance demands of modern trading
+                systems.
               </p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              {AI_FEATURES.map((f) => (
-                <Card key={f.title} className="border-border/60 relative overflow-hidden">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-primary/10 text-primary flex size-9 items-center justify-center rounded-md">
-                        <f.icon className="size-4" />
-                      </div>
-                      <Badge
-                        variant={f.status === "Available" ? "default" : "secondary"}
-                        className="text-[10px]"
-                      >
-                        {f.status}
-                      </Badge>
+
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                {
+                  icon: <LineChart className="size-6" />,
+                  title: "Curves & Calibration",
+                  description:
+                    "10+ interpolation schemes, parametric models (Nelson-Siegel, Svensson, Smith-Wilson), and a Jacobian-based Solver with Levenberg-Marquardt for single and multi-curve calibration.",
+                },
+                {
+                  icon: <Layers className="size-6" />,
+                  title: "30+ Instruments Across 4 Asset Classes",
+                  description:
+                    "Rates, credit, FX, and financing with consistent API patterns. IRS, bonds, callable bonds, CDS, caps, floors, FX forwards, NDFs, and cross-currency swaps out of the box.",
+                },
+                {
+                  icon: <Shield className="size-6" />,
+                  title: "Producttion Ready Risk & Valuation Engine",
+                  description:
+                    "Delta, gamma, and bucket-level risk via automatic differentiation — no finite differences. Full JSON serialization for every object, ready for agent pipelines and institutional workflows.",
+                },
+              ].map((feature) => (
+                <Card
+                  key={feature.title}
+                  className="border-border bg-card transition-all hover:-translate-y-1 hover:border-primary/30"
+                >
+                  <CardContent className="p-6">
+                    <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      {feature.icon}
                     </div>
-                    <CardTitle className="mt-2 text-base">{f.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <CardDescription className="text-sm leading-relaxed">{f.description}</CardDescription>
+                    <h3 className="mb-2 font-semibold text-foreground">{feature.title}</h3>
+                    <p className="text-sm text-muted-foreground">{feature.description}</p>
                   </CardContent>
                 </Card>
               ))}
             </div>
-            <div className="mt-8 text-center">
-              <p className="text-muted-foreground text-sm">
-                With MCP integration, an AI assistant can: <em>&quot;Build a SOFR curve from today&apos;s swaps, price a 5Y IRS, and show me the delta ladder&quot;</em> — and Vade executes each step as a native tool call.
-              </p>
-            </div>
           </div>
         </section>
 
-        <Separator />
+        {/* CTA Section */}
+        <section className="py-24">
+          <div className="container mx-auto px-6">
+            <div className="relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent p-12 md:p-16">
+              {/* Background glow */}
+              <div className="absolute right-0 top-0 size-96 rounded-full bg-primary/20 blur-[100px]" />
 
-        {/* Roadmap / Asset Class Progress */}
-        <section className="mx-auto max-w-6xl px-6 py-24">
-          <div className="mb-12 text-center">
-            <Badge variant="outline" className="mb-4">
-              Roadmap progress
-            </Badge>
-            <h2 className="text-3xl font-bold tracking-tight">Broad coverage, actively growing</h2>
-            <p className="text-muted-foreground mx-auto mt-3 max-w-2xl text-base">
-              30+ instruments and analytics shipped across four asset classes. Swaptions, FX options, financing, portfolio risk,
-              and AI integration are next.
-            </p>
-          </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {ASSET_CLASSES.map((ac) => (
-              <Link
-                key={ac.title}
-                href={ac.href}
-                className="group border-border/60 hover:border-primary/50 flex flex-col rounded-xl border p-6 transition-all"
-              >
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-bold">{ac.title}</h3>
-                  <TrendingUp className="text-primary size-4" />
-                </div>
-                <ProgressBar shipped={ac.shipped} total={ac.shipped + ac.planned.length} />
-                <ul className="mt-4 space-y-1.5">
-                  {ac.items.map((item) => (
-                    <li key={item} className="flex items-start gap-2 text-xs">
-                      <span className="text-primary mt-0.5">&#10003;</span>
-                      <span className="text-muted-foreground">{item}</span>
-                    </li>
-                  ))}
-                </ul>
-                {ac.planned.length > 0 && (
-                  <div className="border-border/60 mt-4 border-t pt-3">
-                    <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">
-                      Coming next
-                    </span>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {ac.planned.map((p) => (
-                        <Badge key={p} variant="secondary" className="text-[10px]">
-                          {p}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </Link>
-            ))}
-          </div>
-          <div className="mt-8 text-center">
-            <Link
-              href="/docs/roadmap"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-xs font-medium transition-all hover:bg-input/50"
-            >
-              View Full Roadmap
-              <ArrowRight className="size-4" />
-            </Link>
-          </div>
-        </section>
-
-        <Separator />
-
-        {/* Code Example */}
-        <section className="bg-muted/30 py-24">
-          <div className="mx-auto max-w-6xl px-6">
-            <div className="grid items-center gap-12 lg:grid-cols-2">
-              <div>
-                <Badge variant="outline" className="mb-4">
-                  Quick start
-                </Badge>
-                <h2 className="text-3xl font-bold tracking-tight">From zero to calibrated curve in minutes</h2>
-                <p className="text-muted-foreground mt-4 text-base leading-relaxed">
-                  Build a multi-node SOFR discount curve, calibrate it to live market instruments, price swaps, and
-                  compute delta risk — all with idiomatic Python backed by compiled Rust.
+              <div className="relative z-10 max-w-2xl">
+                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">Ready to get started?</h2>
+                <p className="mb-8 text-muted-foreground text-pretty">
+                  Install vade and have a calibrated SOFR curve running in under 5 minutes. Open source, forever free.
                 </p>
-                <div className="mt-6 flex flex-col gap-3">
-                  {[
-                    "Automatic differentiation — no finite differences",
-                    "Sub-millisecond calibration on modern hardware",
-                    "Full IDE support via PyO3 type stubs",
-                    "JSON-serializable for agent tool pipelines",
-                  ].map((item) => (
-                    <div key={item} className="flex items-start gap-2 text-sm">
-                      <ChevronRight className="text-primary mt-0.5 size-4 shrink-0" />
-                      <span className="text-muted-foreground">{item}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-8">
+                <div className="flex flex-col gap-4 sm:flex-row">
                   <Link
-                    href="/docs/guides/quick-start"
-                    className="inline-flex h-8 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-all hover:bg-primary/80"
+                    href="/docs/getting-started/installation"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                   >
-                    View Full Guide
+                    Read the Docs
                     <ArrowRight className="size-4" />
+                  </Link>
+                  <Link
+                    href="https://github.com/sercanatalik/vadepy"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-border px-6 text-sm font-medium transition-colors hover:bg-secondary"
+                  >
+                    <GitBranch className="size-4" />
+                    Star on GitHub
                   </Link>
                 </div>
               </div>
-              <div className="overflow-hidden rounded-xl border bg-[#0d1117] shadow-xl">
-                <div className="border-b border-white/10 px-4 py-3">
-                  <div className="flex items-center gap-1.5">
-                    <div className="size-3 rounded-full bg-red-500/80" />
-                    <div className="size-3 rounded-full bg-yellow-500/80" />
-                    <div className="size-3 rounded-full bg-green-500/80" />
-                    <span className="text-muted-foreground ml-3 font-mono text-xs">quick_start.py</span>
-                  </div>
-                </div>
-                <pre className="overflow-x-auto p-5 font-mono text-xs leading-relaxed text-slate-300">
-                  <code>{CODE_SNIPPET}</code>
-                </pre>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <Separator />
-
-        {/* Docs Grid */}
-        <section className="mx-auto max-w-6xl px-6 py-24">
-          <div className="mb-10">
-            <h2 className="text-2xl font-bold tracking-tight">Explore the documentation</h2>
-            <p className="text-muted-foreground mt-2 text-sm">Jump straight to what you need.</p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {DOC_SECTIONS.map((s) => (
-              <Link
-                key={s.href}
-                href={s.href}
-                className="group border-border/60 hover:border-primary/50 hover:bg-accent/50 flex flex-col gap-3 rounded-xl border p-5 transition-all"
-              >
-                <div className="bg-primary/10 text-primary flex size-8 items-center justify-center rounded-md">
-                  <s.icon className="size-4" />
-                </div>
-                <div>
-                  <div className="group-hover:text-primary text-sm font-medium transition-colors">{s.label}</div>
-                  <div className="text-muted-foreground mt-1 text-xs leading-snug">{s.description}</div>
-                </div>
-                <ArrowRight className="text-muted-foreground group-hover:text-primary mt-auto size-4 transition-colors" />
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section className="bg-primary/5 border-y py-20">
-          <div className="mx-auto max-w-2xl px-6 text-center">
-            <h2 className="text-3xl font-bold tracking-tight">Ready to build?</h2>
-            <p className="text-muted-foreground mt-3 text-base">
-              Install vade and have a calibrated SOFR curve running in under 5 minutes.
-            </p>
-            <div className="mt-4 inline-flex items-center gap-2 rounded-lg border bg-background px-4 py-2 font-mono text-sm">
-              <span className="text-muted-foreground">$</span>
-              <span>pip install vade</span>
-            </div>
-            <div className="mt-6 flex justify-center gap-3">
-              <Link
-                href="/docs/getting-started/installation"
-                className="inline-flex h-8 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-all hover:bg-primary/80"
-              >
-                Get Started
-                <ArrowRight className="size-4" />
-              </Link>
-              <Link
-                href="/docs/guides/quick-start"
-                className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-xs font-medium transition-all hover:bg-input/50"
-              >
-                Quick Start Guide
-              </Link>
             </div>
           </div>
         </section>
       </main>
 
       {/* Footer */}
-      <footer className="border-t py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 text-sm sm:flex-row">
-          <div className="text-muted-foreground flex items-center gap-2">
-            <div className="bg-primary size-4 rounded-sm" />
-            <span>vade — AI-ready quantitative analytics for Python</span>
-          </div>
-          <div className="text-muted-foreground flex gap-5">
-            <Link href="/docs" className="hover:text-foreground transition-colors">
-              Docs
-            </Link>
-            <Link href="https://github.com/sercanatalik/vadepy" className="hover:text-foreground transition-colors">
-              GitHub
-            </Link>
-            <Link href="/docs/api" className="hover:text-foreground transition-colors">
-              API
-            </Link>
-            <Link href="/docs/roadmap" className="hover:text-foreground transition-colors">
-              Roadmap
-            </Link>
-            <Link href="mailto:info@vadepy.dev" className="hover:text-foreground transition-colors">
-              info@vadepy.dev
-            </Link>
+      <footer className="border-t border-border py-12">
+        <div className="container mx-auto px-6">
+          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-foreground">Vade</span>
+              <span className="font-semibold text-primary">Py</span>
+              <span className="ml-4 text-sm text-muted-foreground">
+                AI-ready quantitative analytics for Python
+              </span>
+            </div>
+            <div className="flex items-center gap-6 text-sm text-muted-foreground">
+              <Link href="/docs" className="transition-colors hover:text-foreground">
+                Docs
+              </Link>
+              <Link href="https://github.com/sercanatalik/vadepy" className="transition-colors hover:text-foreground">
+                GitHub
+              </Link>
+              <Link href="/docs/api" className="transition-colors hover:text-foreground">
+                API
+              </Link>
+              <Link href="/docs/roadmap" className="transition-colors hover:text-foreground">
+                Roadmap
+              </Link>
+              <Link href="mailto:info@vadepy.dev" className="transition-colors hover:text-foreground">
+                info@vadepy.dev
+              </Link>
+            </div>
           </div>
         </div>
       </footer>
