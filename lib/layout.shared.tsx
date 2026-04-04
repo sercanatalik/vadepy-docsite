@@ -5,7 +5,7 @@ export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
       title: (
-        <span className="flex items-baseline gap-0 text-lg font-extrabold tracking-tight">
+     <span className="flex items-baseline gap-0 text-lg font-extrabold tracking-tight">
           <span>Vade</span>
           <span className="text-primary text-xl">Py</span>
         </span>
