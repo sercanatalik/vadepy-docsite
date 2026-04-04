@@ -238,7 +238,7 @@ export default function HomePage() {
                     "Multi-Curve Bootstrap & Calibration",
                     "Bucket-Level Risk Analytics",
                   ],
-                  next: ["Swaptions", "Bond Futures"],
+                  next: ["Swaptions", "Bond Futures","Bond Options"],
                 },
                 {
                   name: "Credit",
