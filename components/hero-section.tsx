@@ -12,7 +12,7 @@ export default function HeroSection() {
       {/* PixelBlast background */}
       <div className="pointer-events-none absolute inset-0">
         <PixelBlast
-          color="#4ade80"
+          color="#2d7a5f"
           pixelSize={4}
           variant="circle"
           patternScale={1.5}
@@ -73,6 +73,12 @@ export default function HeroSection() {
             className="inline-flex h-9 items-center gap-1 rounded-md border border-white/15 px-4 text-sm font-medium text-slate-300 transition-all hover:border-white/30 hover:bg-white/5 hover:text-white"
           >
             Roadmap
+          </Link>
+          <Link
+            href="mailto:info@vadepy.dev?subject=Feature%20Request"
+            className="inline-flex h-9 items-center gap-1 rounded-md border border-white/15 px-4 text-sm font-medium text-slate-300 transition-all hover:border-white/30 hover:bg-white/5 hover:text-white"
+          >
+            Request Feature
           </Link>
         </div>
 
