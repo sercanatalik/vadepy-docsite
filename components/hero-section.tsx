@@ -39,7 +39,7 @@ export default function HeroSection() {
 
       <div className="relative z-10 flex max-w-3xl flex-col items-center gap-6">
         {/* Announcement badge */}
-        <Badge variant="outline" className="border-primary/30 bg-primary/5 px-4 py-1.5 text-sm text-primary">
+        <Badge variant="outline" className="border-primary/30 bg-primary/5 px-4 py-1.5 text-sm text-primary-foreground">
           <Sparkles className="mr-2 size-3.5" />
           AI-Ready &middot; Open Source &middot; Rust-Powered
         </Badge>
