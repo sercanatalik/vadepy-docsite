@@ -87,7 +87,7 @@ export default function HeroSection() {
           {[
             { value: "<1ms", label: "curve calibration" },
             { value: "30+", label: "instruments shipped" },
-            { value: "3", label: "asset classes" },
+            { value: "4", label: "asset classes" },
             { value: "AD", label: "automatic differentiation" },
           ].map((stat) => (
             <div key={stat.label} className="flex flex-col items-center gap-1">

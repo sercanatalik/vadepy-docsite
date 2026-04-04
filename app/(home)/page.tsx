@@ -103,6 +103,19 @@ const ASSET_CLASSES = [
     ],
     planned: ["FX Options & Vol Surface", "Exotic Barriers & Digitals"],
   },
+  {
+    title: "Financing",
+    href: "/docs/roadmap",
+    shipped: 0,
+    items: [],
+    planned: [
+      "Repo & Reverse Repo",
+      "Securities Lending",
+      "Total Return Swaps",
+      "Syndicated & Bilateral Loans",
+      "Bond Forwards",
+    ],
+  },
 ];
 
 const AI_FEATURES = [
@@ -212,7 +225,7 @@ export default function HomePage() {
               Institutional-grade fixed income analytics
             </h2>
             <p className="text-muted-foreground mx-auto mt-3 max-w-2xl text-base">
-              From curve construction to exotic instrument pricing and risk — across rates, credit, and FX — vade
+              From curve construction to exotic instrument pricing and risk — across rates, credit, FX, and financing — vade
               handles it at native Rust speed with first-class AI agent support.
             </p>
           </div>
@@ -289,11 +302,11 @@ export default function HomePage() {
             </Badge>
             <h2 className="text-3xl font-bold tracking-tight">Broad coverage, actively growing</h2>
             <p className="text-muted-foreground mx-auto mt-3 max-w-2xl text-base">
-              30+ instruments and analytics shipped across three asset classes. Swaptions, FX options, portfolio risk,
+              30+ instruments and analytics shipped across four asset classes. Swaptions, FX options, financing, portfolio risk,
               and AI integration are next.
             </p>
           </div>
-          <div className="grid gap-6 lg:grid-cols-3">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {ASSET_CLASSES.map((ac) => (
               <Link
                 key={ac.title}
