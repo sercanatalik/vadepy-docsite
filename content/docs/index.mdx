@@ -37,13 +37,19 @@ Learn how vade works under the hood -- the Rust/Python architecture and the auto
 
 Complete parameter signatures, types, and working examples for every vade class and function.
 
+- [API Reference](api/index) -- Full API index with product sections and shared infrastructure
+
+### By Product
+
+- [Rates](api/rates/index) -- Interest rate curves, instruments, and calibration
+- [FX](api/fx/index) -- FX rates, forwards, cross-currency, and non-deliverable instruments
+- [Credit](api/credit/index) -- Bonds, CDS, callable bonds, and spread analytics
+
+### Shared Infrastructure
+
 - [Calendar](api/calendar) -- Schedule generation, business day calendars, day count fractions, tenor arithmetic
 - [Autodiff](api/autodiff) -- Dual and Dual2 automatic differentiation types
 - [Numerical](api/numerical) -- Root-finding solvers (Brent, Newton-Raphson)
-- [Curves](api/curves) -- Discount, forward, spread, and parametric curve classes
-- [Instruments](api/instruments) -- IRS, FRA, ZCS, bonds, CDS, and other financial instruments
-- [Solver](api/solver) -- Multi-curve calibration solver and bootstrap
-- [FX](api/fx) -- FX rates, forwards, and cross-currency support
 - [Context](api/context) -- MarketContext, FixingStore, and evaluation date management
 - [Cashflows](api/cashflows) -- Fixed and floating leg cashflow generation
 
@@ -86,12 +92,6 @@ FX spot rate triangulation, forward construction, cross-currency swaps, and non-
 - [FX Rates & Forwards](guides/fx/fx-rates-forwards) -- FX rate triangulation and forward construction
 - [Cross-Currency Swaps](guides/fx/cross-currency) -- Cross-currency swap pricing and risk
 - [Non-Deliverable Instruments](guides/fx/non-deliverable) -- NDF and non-deliverable swap pricing
-
-## Financing
-
-Planned instruments including repo, securities lending, and structured products.
-
-- [Overview](guides/financing/index) -- Planned instruments and future scope
 
 ## Learning Paths
 

@@ -5,8 +5,8 @@ description: "Price interest rate instruments against calibrated curves using `.
 
 Price interest rate instruments against calibrated curves using `.rate()`,
 `.npv()`, and `.cashflows()`. This guide covers
-[IRS](../../api/instruments#irs), FRA, ZCS, OIS, and Deposit pricing against a
-[DiscountCurve](../../api/curves#discountcurve) calibrated from USD SOFR market
+[IRS](../../api/rates/instruments#irs), FRA, ZCS, OIS, and Deposit pricing against a
+[DiscountCurve](../../api/rates/curves#discountcurve) calibrated from USD SOFR market
 data.
 
 ---
@@ -87,7 +87,7 @@ perspective.
 ## FRA Pricing
 
 Price a forward rate agreement covering the 3-month to 6-month period.
-[FRA](../../api/instruments#fra) `.rate()` returns the implied forward rate in
+[FRA](../../api/rates/instruments#fra) `.rate()` returns the implied forward rate in
 decimal form.
 
 ```python
@@ -104,7 +104,7 @@ float(fra.npv(calibrated))   # -323.57645004154983
 
 ## ZCS Pricing
 
-Price a 3-year zero coupon swap. [ZCS](../../api/instruments#zcs) `.rate()`
+Price a 3-year zero coupon swap. [ZCS](../../api/rates/instruments#zcs) `.rate()`
 returns the par zero-coupon rate in percentage form.
 
 ```python
@@ -122,7 +122,7 @@ float(zcs.npv(calibrated))   # -1666.5413047417533
 
 ## OIS Pricing
 
-Price a 2-year overnight index swap. [OIS](../../api/instruments#ois) is
+Price a 2-year overnight index swap. [OIS](../../api/rates/instruments#ois) is
 structurally similar to IRS but designed for overnight rate compounding.
 
 ```python
@@ -141,7 +141,7 @@ float(ois.npv(calibrated))   # -956.7775507331098
 
 ## Deposit Pricing
 
-Price a 1-month deposit. [Deposit](../../api/instruments#deposit) `.rate()`
+Price a 1-month deposit. [Deposit](../../api/rates/instruments#deposit) `.rate()`
 returns the implied deposit rate in decimal form.
 
 ```python

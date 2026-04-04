@@ -1,13 +1,13 @@
 ---
 title: "Serialization"
-description: "All major curve types and the [Solver](../api/solver.md#solver) support JSON"
+description: "All major curve types and the [Solver](../api/rates/solver.md#solver) support JSON"
 ---
 
-All major curve types and the [Solver](../api/solver#solver) support JSON
+All major curve types and the [Solver](../api/rates/solver#solver) support JSON
 serialization via `to_json()` and `from_json()`. This enables persisting
 calibrated curves to disk, transmitting them over a network, or inspecting
 their structure for debugging. Links to
-[DiscountCurve](../api/curves#discountcurve) for the primary example.
+[DiscountCurve](../api/rates/curves#discountcurve) for the primary example.
 
 ---
 
@@ -49,8 +49,8 @@ assert float(restored.discount_factor(datetime.date(2026, 6, 16))) == float(
 ## LineCurve and Parametric Curves
 
 The same `to_json()` / `from_json()` pattern applies to
-[LineCurve](../api/curves#linecurve) and parametric curve types like
-[NelsonSiegel](../api/curves#nelsonsiegel). Each type's `from_json()` is a
+[LineCurve](../api/rates/curves#linecurve) and parametric curve types like
+[NelsonSiegel](../api/rates/curves#nelsonsiegel). Each type's `from_json()` is a
 static method that returns the correct type.
 
 ```python continuation
@@ -84,7 +84,7 @@ assert float(ns_restored.zero_rate(effective, datetime.date(2026, 6, 16))) == fl
 
 ## Solver State
 
-Persisting a calibrated [Solver](../api/solver#solver) captures the full
+Persisting a calibrated [Solver](../api/rates/solver#solver) captures the full
 calibration state -- curves, instruments, and weights. This is useful for
 reproducibility: save after calibration, restore later without re-running the
 optimization.

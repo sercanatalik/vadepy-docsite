@@ -1,0 +1,436 @@
+---
+title: "FX Instruments"
+description: "Cross-currency swaps, FX forwards, and non-deliverable instruments."
+---
+
+Cross-currency swaps, FX forwards, and non-deliverable instruments.
+
+All types are available via flat import:
+
+```bash
+from vade import XCS, FXForward, NDF, NDIRS, NDXCS
+```
+
+Or via product-path import:
+
+```bash
+from vade.instruments.fx import XCS, FXForward, NDF, NDIRS, NDXCS
+```
+
+See [Conventions](../../conventions) for all accepted string parameter values.
+
+**Contents:**
+[XCS](#xcs) | [FXForward](#fxforward) | [NDF](#ndf) | [NDIRS](#ndirs) | [NDXCS](#ndxcs)
+
+---
+
+## XCS
+
+Cross Currency Swap with 4-curve pricing model. _Python wrapper composing legs across currencies._
+
+See also: [Cross-Currency Swaps Guide](../guides/fx/cross-currency) for cross-currency pricing workflows.
+
+**Alias:** `XCS = CrossCurrencySwap`
+
+### Constructor
+
+```bash
+XCS(
+    *,
+    effective=None,
+    termination=None,
+    frequency="q",
+    leg1_currency="EUR",
+    leg2_currency="USD",
+    leg1_notional=1_000_000.0,
+    leg2_notional=1_100_000.0,
+    initial_fx_rate=1.1,
+    fixed_rate=None,
+    notional_exchange=True,
+    convention="act360",
+    leg2_convention=None,
+    fixing_method="rfr_payment_delay",
+    spread=0.0,
+    modifier="mf",
+    stub="shortfront",
+    mtm_leg=None,
+)
+```
+
+### Parameters
+
+| Name                | Type                       | Default               | Description                                                  |
+| ------------------- | -------------------------- | --------------------- | ------------------------------------------------------------ |
+| `effective`         | `datetime.date` or `None`  | `None`                | Start date                                                   |
+| `termination`       | `date`, `str`, or `None`   | `None`                | End date or tenor string                                     |
+| `frequency`         | `str`                      | `"q"`                 | Payment frequency                                            |
+| `leg1_currency`     | `str`                      | `"EUR"`               | Leg 1 currency code                                          |
+| `leg2_currency`     | `str`                      | `"USD"`               | Leg 2 currency code                                          |
+| `leg1_notional`     | `float`                    | `1_000_000.0`         | Leg 1 notional amount                                        |
+| `leg2_notional`     | `float`                    | `1_100_000.0`         | Leg 2 notional amount                                        |
+| `initial_fx_rate`   | `float`                    | `1.1`                 | Initial FX rate (leg2/leg1)                                  |
+| `fixed_rate`        | `float` or `None`          | `None`                | Fixed rate on one leg (if applicable)                        |
+| `notional_exchange` | `bool`                     | `True`                | Whether to exchange notionals at start and end               |
+| `convention`        | `str`                      | `"act360"`            | Day count convention for leg 1                               |
+| `leg2_convention`   | `str` or `None`            | `None`                | Day count convention for leg 2 (defaults to `convention`)    |
+| `fixing_method`     | `str`                      | `"rfr_payment_delay"` | Rate fixing method                                           |
+| `spread`            | `float`                    | `0.0`                 | Spread on leg 2 (basis points)                               |
+| `modifier`          | `str`                      | `"mf"`                | Business day adjustment rule                                 |
+| `stub`              | `str`                      | `"shortfront"`        | Stub period preference                                       |
+| `mtm_leg`           | `int` or `None`            | `None`                | Mark-to-market reset leg (`1` or `2`)                        |
+
+See [Conventions](../conventions) for accepted values for `frequency`, `convention`, `fixing_method`, `modifier`, and `stub`.
+
+### Methods
+
+XCS methods require four separate curves (discount and forecast for each currency) plus [FXRates](fx#fxrates).
+
+| Method                                                                                           | Returns     | Description                    |
+| ------------------------------------------------------------------------------------------------ | ----------- | ------------------------------ |
+| `.rate(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast, fx_rates, metric="leg2")`             | `float`     | Cross-currency basis spread    |
+| `.npv(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast, fx_rates)`                             | `float`     | Net present value              |
+| `.cashflows(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast)`                                 | `DataFrame` | Period-level cashflow table    |
+
+### Example
+
+```python
+import datetime
+from vade import XCS, DiscountCurve, FXRates
+
+eur_disc = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97, datetime.date(2026, 1, 1): 0.94},
+    interpolation="log_linear", convention="act365f", id="eur_disc",
+)
+eur_fcast = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97, datetime.date(2026, 1, 1): 0.94},
+    interpolation="log_linear", convention="act365f", id="eur_fcast",
+)
+usd_disc = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.96, datetime.date(2026, 1, 1): 0.92},
+    interpolation="log_linear", convention="act365f", id="usd_disc",
+)
+usd_fcast = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.96, datetime.date(2026, 1, 1): 0.92},
+    interpolation="log_linear", convention="act365f", id="usd_fcast",
+)
+fx = FXRates({"eurusd": 1.10}, settlement=datetime.date(2024, 1, 1))
+
+xcs = XCS(
+    effective=datetime.date(2024, 1, 1),
+    termination="2Y",
+    frequency="q",
+    leg1_currency="EUR",
+    leg2_currency="USD",
+    leg1_notional=1_000_000.0,
+    leg2_notional=1_100_000.0,
+    initial_fx_rate=1.10,
+    convention="act360",
+)
+float(xcs.rate(eur_disc, eur_fcast, usd_disc, usd_fcast, fx))  # cross-currency basis spread
+float(xcs.npv(eur_disc, eur_fcast, usd_disc, usd_fcast, fx))  # NPV in base currency
+```
+
+______________________________________________________________________
+
+## FXForward
+
+FX Forward instrument. _Rust-backed._
+
+See also: [FX Rates & Forwards Guide](../guides/fx/fx-rates-forwards) for FX forward pricing.
+
+### Constructor
+
+```bash
+FXForward(
+    *,
+    pair="eurusd",
+    notional=1_000_000.0,
+    delivery=None,
+    currency="USD",
+)
+```
+
+### Parameters
+
+| Name       | Type                       | Default       | Description                                    |
+| ---------- | -------------------------- | ------------- | ---------------------------------------------- |
+| `pair`     | `str`                      | `"eurusd"`    | Currency pair (e.g., `"eurusd"`, `"gbpusd"`)   |
+| `notional` | `float`                    | `1_000_000.0` | Notional amount                                |
+| `delivery` | `datetime.date` or `None`  | `None`        | Delivery date                                  |
+| `currency` | `str`                      | `"USD"`       | Settlement currency                            |
+
+### Methods
+
+FXForward methods take a discount curve, forecast curve, and [FXRates](fx#fxrates).
+
+| Method                                              | Returns     | Description                |
+| --------------------------------------------------- | ----------- | -------------------------- |
+| `.rate(disc_curve, forecast_curve, fx_rates)`       | `float`     | Forward FX rate            |
+| `.npv(disc_curve, forecast_curve, fx_rates)`        | `float`     | Net present value          |
+| `.cashflows(disc_curve, forecast_curve, fx_rates)`  | `DataFrame` | Period-level cashflow table |
+
+### Example
+
+```python
+import datetime
+from vade import FXForward, DiscountCurve, FXRates
+
+eur_curve = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.97},
+    interpolation="log_linear", convention="act365f", id="eur_curve",
+)
+usd_curve = DiscountCurve(
+    {datetime.date(2024, 1, 1): 1.0, datetime.date(2025, 1, 1): 0.96},
+    interpolation="log_linear", convention="act365f", id="usd_curve",
+)
+fx = FXRates({"eurusd": 1.10}, settlement=datetime.date(2024, 1, 1))
+
+fxf = FXForward(
+    pair="eurusd",
+    notional=1_000_000.0,
+    delivery=datetime.date(2024, 7, 1),
+    currency="USD",
+)
+float(fxf.rate(usd_curve, eur_curve, fx))  # forward FX rate
+float(fxf.npv(usd_curve, eur_curve, fx))  # NPV of the forward position
+```
+
+______________________________________________________________________
+
+## Non-Deliverable Instruments
+
+Non-deliverable (ND) instruments settle in a convertible currency rather than
+the restricted currency in which cashflows accrue. FX conversion uses
+per-period fixings (known or IRP-implied).
+
+______________________________________________________________________
+
+## NDF
+
+Non-Deliverable Forward: single-currency net settlement of an FX forward.
+Subclass of `FXForward`.
+
+See also: [Non-Deliverable Instruments Guide](../guides/fx/non-deliverable) for NDF, NDIRS, and NDXCS workflows.
+
+### Constructor
+
+```bash
+NDF(
+    *,
+    spec=None,           # Market convention ("usdbrl_ndf", "usdkrw_ndf", ...)
+    effective=None,      # Effective / trade date
+    delivery=None,       # Settlement date
+    pair="usdbrl",       # FX pair (restricted vs settlement)
+    notional=1_000_000.0,
+    currency="USD",      # Notional currency
+    settlement_currency="usd",
+    contracted_rate=None,  # Agreed FX rate (None = at-market)
+    fx_fixings=None,     # dict[date, float] for known fixings
+)
+```
+
+### Methods
+
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `rate` | `(disc_curve, forecast_curve, fx_rates)` | Implied forward rate (IRP) |
+| `npv` | `(disc_curve, forecast_curve, fx_rates)` | Net settlement NPV in settlement currency |
+| `cashflows` | `(disc_curve, forecast_curve, fx_rates)` | Polars DataFrame |
+| `spread` | `(disc_curve, forecast_curve, fx_rates)` | Spread to contracted rate |
+| `pillar_date` | `()` | Delivery date |
+| `to_json` | `()` | JSON-serializable dict |
+| `from_json` | `(data)` | Reconstruct NDF from dict |
+
+### Example
+
+```python
+import datetime
+from vade import NDF, DiscountCurve, FXRates
+
+ndf = NDF(
+    spec="usdbrl_ndf",
+    effective=datetime.date(2025, 6, 16),
+    delivery=datetime.date(2025, 9, 16),
+    notional=1_000_000.0,
+    contracted_rate=5.25,
+)
+
+usd = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2026, 6, 16): 0.96},
+    interpolation="log_linear", convention="act360",
+)
+brl = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2026, 6, 16): 0.88},
+    interpolation="log_linear", convention="act360",
+)
+fxr = FXRates({"usdbrl": 5.20}, settlement=datetime.date(2025, 6, 16))
+
+fair_rate = ndf.rate(usd, brl, fxr)
+npv = ndf.npv(usd, brl, fxr)
+assert abs(float(fair_rate)) < 10
+assert abs(float(npv)) < 1e8
+```
+
+______________________________________________________________________
+
+## NDIRS
+
+Non-Deliverable Interest Rate Swap: IRS where cashflows accrue in a
+restricted currency but settle in a convertible currency via per-period
+FX conversion. Subclass of `InterestRateSwap`.
+
+Uses a 3-curve model: settlement discount, restricted forecast, restricted discount.
+
+### Constructor
+
+```bash
+NDIRS(
+    *,
+    spec=None,             # Market convention ("usdbrl_ndirs", ...)
+    effective=None,
+    termination=None,      # date or tenor string ("5Y")
+    frequency="s",
+    fixed_rate=0.0,
+    notional=1_000_000.0,
+    convention="act360",
+    settlement_currency="usd",
+    pair="usdbrl",
+    fx_fixings=None,       # dict[date, float] known FX fixings
+)
+```
+
+### Methods
+
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `rate` | `(curves=[disc, forecast, leg2_disc], fx_rates=fxr)` | Par fixed rate |
+| `npv` | `(curves=[disc, forecast, leg2_disc], fx_rates=fxr)` | NPV in settlement currency |
+| `cashflows` | `(curves=[disc, forecast, leg2_disc], fx_rates=fxr)` | Polars DataFrame with settlement columns |
+| `spread` | `(curves=[disc, forecast, leg2_disc], fx_rates=fxr)` | Par spread on float leg |
+| `pillar_date` | `()` | Maturity date |
+| `to_json` | `()` | JSON-serializable dict |
+| `from_json` | `(data)` | Reconstruct NDIRS from dict |
+
+Curve arguments: `disc_curve` = settlement discount, `forecast_curve` = restricted forecast,
+`leg2_disc_curve` = restricted discount (for IRP forwards).
+
+### Example
+
+```python
+import datetime
+from vade import NDIRS, DiscountCurve, FXRates
+
+ndirs = NDIRS(
+    spec="usdbrl_ndirs",
+    effective=datetime.date(2025, 6, 16),
+    termination="2Y",
+    fixed_rate=10.0,
+    notional=1_000_000.0,
+)
+
+usd = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2028, 6, 16): 0.89},
+    interpolation="log_linear", convention="act360",
+)
+brl = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2028, 6, 16): 0.71},
+    interpolation="log_linear", convention="act360",
+)
+fxr = FXRates({"usdbrl": 5.20}, settlement=datetime.date(2025, 6, 16))
+
+par_rate = ndirs.rate(curves=[usd, brl, brl], fx_rates=fxr)
+npv = ndirs.npv(curves=[usd, brl, brl], fx_rates=fxr)
+assert 0 < float(par_rate) < 30
+assert abs(float(npv)) < 1e8
+```
+
+______________________________________________________________________
+
+## NDXCS
+
+Non-Deliverable Cross-Currency Swap: one leg is non-deliverable with
+cashflows converted via per-period FX fixings and settled in a convertible
+currency. Supports notional exchanges and MTM resets on the ND leg.
+Subclass of `CrossCurrencySwap`.
+
+### Constructor
+
+```bash
+NDXCS(
+    *,
+    spec=None,               # Market convention ("usdbrl_ndxcs", ...)
+    effective=None,
+    termination=None,        # date or tenor string ("5Y")
+    frequency="q",
+    leg1_currency="USD",
+    leg2_currency="BRL",
+    leg1_notional=1_000_000.0,
+    leg2_notional=5_000_000.0,
+    initial_fx_rate=5.0,
+    fixed_rate=None,         # None = float-float
+    notional_exchange=True,
+    settlement_currency="usd",
+    nd_leg=2,                # Which leg is non-deliverable (1 or 2)
+    pair=None,               # FX pair (derived from currencies if None)
+    fx_fixings=None,         # dict[date, float] for ALL FX fixing needs
+    mtm_leg=None,            # Optional MTM notional reset leg
+)
+```
+
+### Methods
+
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `rate` | `(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast, fx_rates)` | Par basis spread on ND leg |
+| `npv` | `(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast, fx_rates)` | NPV in settlement currency |
+| `cashflows` | `(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast, fx_rates)` | Polars DataFrame with settlement columns |
+| `spread` | `(leg1_disc, leg1_forecast, leg2_disc, leg2_forecast, fx_rates)` | Par floating spread |
+| `pillar_date` | `()` | Maturity date |
+| `to_json` | `()` | JSON-serializable dict |
+| `from_json` | `(data)` | Reconstruct NDXCS from dict |
+
+### Example
+
+```bash
+import datetime
+from vade import NDXCS, DiscountCurve, FXRates
+
+ndxcs = NDXCS(
+    effective=datetime.date(2025, 6, 16),
+    termination="2Y",
+    leg1_currency="USD",
+    leg2_currency="BRL",
+    settlement_currency="usd",
+    nd_leg=2,
+    pair="usdbrl",
+    leg1_notional=1_000_000.0,
+    leg2_notional=5_000_000.0,
+    initial_fx_rate=5.0,
+    frequency="q",
+    convention="act360",
+)
+
+usd = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2028, 6, 16): 0.89},
+    interpolation="log_linear", convention="act360",
+)
+brl = DiscountCurve(
+    {datetime.date(2025, 6, 16): 1.0, datetime.date(2028, 6, 16): 0.71},
+    interpolation="log_linear", convention="act360",
+)
+fxr = FXRates({"usdbrl": 5.20}, settlement=datetime.date(2025, 6, 16))
+
+rate = ndxcs.rate(usd, usd, brl, brl, fxr)
+npv = ndxcs.npv(usd, usd, brl, brl, fxr)
+assert abs(float(rate)) < 500
+assert abs(float(npv)) < 1e8
+```
+
+______________________________________________________________________
+
+---
+
+## See Also
+
+- [FX Guides](../../guides/fx/index) -- FX rates, cross-currency, and non-deliverable guides
+- [FX Rates & Forwards API](fx-rates) -- FXRates, FXForwards, FXPair

@@ -1,13 +1,13 @@
 ---
 title: "Risk"
-description: "Compute delta, gamma, and bucket-level risk sensitivities from calibrated curves using [automatic differentiation](../../getting-started/type-system.md). The [Solver](../../api/solver.md#solver) provides AD-based delta and gamma, while [IRImpliedCurve](../../api/curves.md#irimpliedcurve) offers tenor-bucketed risk reporting."
+description: "Compute delta, gamma, and bucket-level risk sensitivities from calibrated curves using [automatic differentiation](../../getting-started/type-system.md). The [Solver](../../api/rates/solver.md#solver) provides AD-based delta and gamma, while [IRImpliedCurve](../../api/rates/curves.md#irimpliedcurve) offers tenor-bucketed risk reporting."
 ---
 
-Compute delta, gamma, and bucket-level risk sensitivities from calibrated curves using [automatic differentiation](../../getting-started/type-system). The [Solver](../../api/solver#solver) provides AD-based delta and gamma, while [IRImpliedCurve](../../api/curves#irimpliedcurve) offers tenor-bucketed risk reporting.
+Compute delta, gamma, and bucket-level risk sensitivities from calibrated curves using [automatic differentiation](../../getting-started/type-system). The [Solver](../../api/rates/solver#solver) provides AD-based delta and gamma, while [IRImpliedCurve](../../api/rates/curves#irimpliedcurve) offers tenor-bucketed risk reporting.
 
 ## Setup -- Calibrate with Labeled Instruments
 
-Calibrate a [DiscountCurve](../../api/curves#discountcurve) using the 5-tuple [instrument format](../../api/solver#instruments-format). Labels are required for delta and gamma output to identify which calibrating instrument drives each sensitivity.
+Calibrate a [DiscountCurve](../../api/rates/curves#discountcurve) using the 5-tuple [instrument format](../../api/rates/solver#instruments-format). Labels are required for delta and gamma output to identify which calibrating instrument drives each sensitivity.
 
 ```python
 import datetime
@@ -181,7 +181,7 @@ len(gamma_df)  # 5
 
 ## Bucket-Level Risk
 
-[IRImpliedCurve](../../api/curves#irimpliedcurve) provides tenor-bucketed DV01 sensitivities by re-parameterizing a calibrated curve into standard tenor buckets. This gives a risk report aligned with market-standard tenor points.
+[IRImpliedCurve](../../api/rates/curves#irimpliedcurve) provides tenor-bucketed DV01 sensitivities by re-parameterizing a calibrated curve into standard tenor buckets. This gives a risk report aligned with market-standard tenor points.
 
 ```python
 import datetime

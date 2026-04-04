@@ -140,14 +140,14 @@ print(len(df_d2.gradient()))  # 2 -- gradient w.r.t. both node variables
 ```
 
 The pattern is consistent across all curve types:
-[DiscountCurve](../api/curves#discountcurve),
-[LineCurve](../api/curves#linecurve), and composite curves all follow
+[DiscountCurve](../api/rates/curves#discountcurve),
+[LineCurve](../api/rates/curves#linecurve), and composite curves all follow
 the same rule. The input node type determines the output type.
 
 ## AD in Practice
 
 You rarely create Dual-valued curves manually. The
-[Solver](../api/solver#solver) does this automatically during calibration:
+[Solver](../api/rates/solver#solver) does this automatically during calibration:
 it replaces your initial float node values with Dual (or Dual2) numbers,
 solves for the correct values, and returns a calibrated curve whose nodes
 carry derivative information.

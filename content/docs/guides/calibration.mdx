@@ -1,13 +1,13 @@
 ---
 title: "Calibration"
-description: "Calibrate single and multi-curve frameworks using the [Solver](../api/solver.md#solver) with Levenberg-Marquardt, Gauss-Newton, and gradient descent algorithms."
+description: "Calibrate single and multi-curve frameworks using the [Solver](../api/rates/solver.md#solver) with Levenberg-Marquardt, Gauss-Newton, and gradient descent algorithms."
 ---
 
-Calibrate single and multi-curve frameworks using the [Solver](../api/solver#solver) with Levenberg-Marquardt, Gauss-Newton, and gradient descent algorithms.
+Calibrate single and multi-curve frameworks using the [Solver](../api/rates/solver#solver) with Levenberg-Marquardt, Gauss-Newton, and gradient descent algorithms.
 
 ## Single-Curve Calibration
 
-Calibrate a single USD SOFR [DiscountCurve](../api/curves#discountcurve) using the default Levenberg-Marquardt algorithm. Define curve nodes at instrument maturity dates with initial discount factors of 1.0, then let the solver find the correct values.
+Calibrate a single USD SOFR [DiscountCurve](../api/rates/curves#discountcurve) using the default Levenberg-Marquardt algorithm. Define curve nodes at instrument maturity dates with initial discount factors of 1.0, then let the solver find the correct values.
 
 ```python
 import datetime
@@ -50,7 +50,7 @@ result.iterations > 0  # True
 
 ## Solver Diagnostics
 
-Inspect calibration quality through the [SolverResult](../api/solver#solverresult) diagnostics. Residuals show per-instrument calibration error and the Jacobian reveals sensitivity structure.
+Inspect calibration quality through the [SolverResult](../api/rates/solver#solverresult) diagnostics. Residuals show per-instrument calibration error and the Jacobian reveals sensitivity structure.
 
 ```python
 import datetime
@@ -145,7 +145,7 @@ mc_result.converged  # True
 mc_result.iterations > 0  # True
 ```
 
-The dict [instrument format](../api/solver#instruments-format) gives explicit control over which curves are used for discounting and forecasting. Use `disc_curve_idx` and `forecast_curve_idx` to map each instrument to the correct curve when a single solver holds multiple curves.
+The dict [instrument format](../api/rates/solver#instruments-format) gives explicit control over which curves are used for discounting and forecasting. Use `disc_curve_idx` and `forecast_curve_idx` to map each instrument to the correct curve when a single solver holds multiple curves.
 
 ```python
 import datetime

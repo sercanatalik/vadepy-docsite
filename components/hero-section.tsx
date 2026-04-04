@@ -29,7 +29,7 @@ export default function HeroSection() {
 
       <div className="relative z-10 flex max-w-3xl flex-col items-center gap-6">
         <Badge variant="secondary" className="px-3 py-1 text-xs font-medium">
-          Powered by Rust via PyO3
+          AI-Ready &middot; Rust-Powered &middot; PyO3
         </Badge>
 
         <h1 className="text-5xl font-bold tracking-tight sm:text-6xl lg:text-7xl">
@@ -41,14 +41,15 @@ export default function HeroSection() {
             glowColor="oklch(0.432 0.095 166.913 / 0.6)"
             animationDuration={0.5}
             pauseBetweenAnimations={5}
+            wordClassName={(word) => (word === "Py" ? "text-primary" : undefined)}
           />
           <br />
-          <span className="text-primary">Interest rate analytics at compiled speed</span>
+          <span className="text-primary">The AI-ready quantitative library</span>
         </h1>
 
         <p className="text-muted-foreground max-w-xl text-lg leading-relaxed">
-          vade is a production-grade Python library for curve construction, instrument pricing, and risk analytics —
-          with all numerical computation running in native Rust.
+          Production-grade fixed income analytics for rates, credit, and FX — built in Rust, exposed to Python, and
+          designed for LLM agent workflows via MCP.
         </p>
 
         <div className="flex flex-wrap justify-center gap-3">
@@ -65,14 +66,21 @@ export default function HeroSection() {
           >
             View Quick Start
           </Link>
+          <Link
+            href="/docs/roadmap"
+            className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-xs font-medium transition-all hover:bg-input/50"
+          >
+            Roadmap
+          </Link>
         </div>
 
         {/* Stats row */}
         <div className="mt-4 flex flex-wrap justify-center gap-8">
           {[
             { value: "<1ms", label: "curve calibration" },
-            { value: "8", label: "module coverage" },
-            { value: "Dual/Dual2", label: "automatic diff" },
+            { value: "30+", label: "instruments shipped" },
+            { value: "3", label: "asset classes" },
+            { value: "AD", label: "automatic differentiation" },
           ].map((stat) => (
             <div key={stat.label} className="flex flex-col items-center gap-0.5">
               <span className="text-foreground text-xl font-bold">{stat.value}</span>

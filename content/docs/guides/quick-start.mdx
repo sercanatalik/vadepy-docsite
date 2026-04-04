@@ -1,9 +1,9 @@
 ---
 title: "Quick Start"
-description: "Build a USD SOFR discount curve, calibrate it to market instruments, price swaps, and compute risk -- all in one workflow. This guide uses [DiscountCurve](../api/curves.md#discountcurve) for curve construction and [Solver](../api/solver.md#solver) for calibration."
+description: "Build a USD SOFR discount curve, calibrate it to market instruments, price swaps, and compute risk -- all in one workflow. This guide uses [DiscountCurve](../api/rates/curves.md#discountcurve) for curve construction and [Solver](../api/rates/solver.md#solver) for calibration."
 ---
 
-Build a USD SOFR discount curve, calibrate it to market instruments, price swaps, and compute risk -- all in one workflow. This guide uses [DiscountCurve](../api/curves#discountcurve) for curve construction and [Solver](../api/solver#solver) for calibration.
+Build a USD SOFR discount curve, calibrate it to market instruments, price swaps, and compute risk -- all in one workflow. This guide uses [DiscountCurve](../api/rates/curves#discountcurve) for curve construction and [Solver](../api/rates/solver#solver) for calibration.
 
 ---
 
@@ -157,7 +157,7 @@ fwd_1y_2y = float(calibrated.forward_rate(
 assert 0.03 < fwd_1y_2y < 0.05  # ~0.036
 ```
 
-The calibrated curve now prices all input instruments back to their market quotes. You can verify this by checking that the [SolverResult](../api/solver#solverresult) residuals are near zero:
+The calibrated curve now prices all input instruments back to their market quotes. You can verify this by checking that the [SolverResult](../api/rates/solver#solverresult) residuals are near zero:
 
 ```python continuation
 assert max(abs(r) for r in result.residuals) < 1e-8

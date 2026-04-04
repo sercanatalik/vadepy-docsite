@@ -5,7 +5,7 @@ description: "Explore how interpolation method choice affects forward rates, and
 
 Explore how interpolation method choice affects forward rates, and learn to work
 with different curve types. This guide builds a calibrated
-[DiscountCurve](../../api/curves#discountcurve) and then reconstructs it with
+[DiscountCurve](../../api/rates/curves#discountcurve) and then reconstructs it with
 three interpolation methods to compare their forward rate profiles.
 
 ---
@@ -190,7 +190,7 @@ varies gradually, and flat-forward creates large jumps at node boundaries.
 
 ## LineCurve
 
-[LineCurve](../../api/curves#linecurve) stores zero rates directly instead of
+[LineCurve](../../api/rates/curves#linecurve) stores zero rates directly instead of
 discount factors. This is useful for representing rate curves, spreads, or any
 quantity that should be interpolated linearly in its native space.
 
@@ -218,7 +218,7 @@ float(line_curve.zero_rate(effective, datetime.date(2027, 6, 16)))  # 0.038
 
 ## ForwardCurve
 
-[ForwardCurve](../../api/curves#forwardcurve) stores instantaneous forward
+[ForwardCurve](../../api/rates/curves#forwardcurve) stores instantaneous forward
 rates. Nodes represent continuously compounded rates on a per-day basis -- to
 express an annualized 4% rate, divide by 365. Discount factors are computed by
 integrating the forward rate function.

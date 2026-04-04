@@ -43,7 +43,7 @@ Vade has three layers. Every user request passes through all three:
 |  python/vade/                               |
 |    __init__.py          re-exports          |
 |    autodiff/__init__.pyi  type stubs        |
-|    curves/__init__.pyi    type stubs        |
+|    marketcurves/__init__.pyi type stubs      |
 |    ...                                      |
 +--------------------------------------------+
 |            PyO3 Binding Layer               |
@@ -89,9 +89,9 @@ The Rust codebase is organized into eight modules, each following the same
 | `autodiff`     | Forward-mode AD types (`Dual`, `Dual2`) and arithmetic operations  |
 | `calendar`     | Business day calendars, schedule generation, day count fractions    |
 | `cashflows`    | Fixed and floating leg generation, period-level cashflow detail     |
-| `curves`       | Discount curves, line curves, composite curves, interpolation      |
-| `fx`           | FX spot rates, cross-rate triangulation, FX forwards               |
+| `marketcurves` | Discount curves, line curves, composite curves, interpolation, FX spot rates, cross-rate triangulation, FX forwards |
 | `instruments`  | IRS, FRA, ZCS, OIS, bonds, CDS, XCS, deposits, cap/floor          |
+| `models`       | Pricing models (Black-76, Bachelier)                               |
 | `numerical`    | Root-finding solvers (Brent, Newton-Raphson)                       |
 | `solver`       | Multi-curve Jacobian-based calibration, bootstrap                  |
 
@@ -100,13 +100,13 @@ function called from the top-level `lib.rs`:
 
 ```text
 lib.rs
-  -> autodiff::register_module    (Dual, Dual2)
-  -> calendar::register_module    (BusinessCalendar, Schedule, dcf, ...)
-  -> curves::py::register_module  (DiscountCurve, LineCurve, ...)
+  -> autodiff::register_module           (Dual, Dual2)
+  -> calendar::register_module           (BusinessCalendar, Schedule, dcf, ...)
+  -> marketcurves::py::register_module   (DiscountCurve, LineCurve, ...)
+  -> marketcurves::fx::py::register_module (FXPair, FXRates, FXForwards)
   -> cashflows::py::register_module
   -> instruments::py::register_module
   -> solver::py::register_module
-  -> fx::py::register_module
   -> numerical::py::register_module
 ```
 
@@ -191,8 +191,8 @@ vade/
   autodiff/
     __init__.py        <-- re-exports Dual, Dual2
     __init__.pyi       <-- type stubs for IDE support
-  curves/
-    __init__.py        <-- re-exports DiscountCurve, LineCurve, ...
+  marketcurves/
+    __init__.py        <-- re-exports DiscountCurve, LineCurve, FXRates, ...
     __init__.pyi       <-- type stubs
   ...
 ```

@@ -1,13 +1,17 @@
 import {
   ArrowRight,
   BookOpen,
+  Bot,
+  BrainCircuit,
   ChevronRight,
   Code2,
   Cpu,
   FlaskConical,
   GitBranch,
   LineChart,
+  Shield,
   Sigma,
+  TrendingUp,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
@@ -21,7 +25,7 @@ const FEATURES = [
     icon: Cpu,
     title: "Rust-Powered Core",
     description:
-      "All computation — curve interpolation, AD propagation, solver calibration — runs in compiled Rust via PyO3. No Python interpreter overhead in the inner loops.",
+      "All computation — curve interpolation, AD propagation, solver calibration — runs in compiled Rust via PyO3. Zero Python overhead in the inner loops.",
   },
   {
     icon: Sigma,
@@ -37,21 +41,91 @@ const FEATURES = [
   },
   {
     icon: FlaskConical,
-    title: "Wide Instrument Coverage",
+    title: "Rates, Credit & FX",
     description:
-      "IRS, FRA, ZCS, OIS, bonds, callable bonds, CDS, XCS, deposits, caps, floors, NDFs — modelled in pure Rust, exposed to Python with full type stubs.",
+      "IRS, bonds, callable bonds, CDS, XCS, caps, floors, NDFs, FX forwards — full fixed income coverage modelled in Rust, exposed to Python.",
   },
   {
     icon: GitBranch,
     title: "Curve Flexibility",
     description:
-      "DiscountCurve, LineCurve, composite and spread curves. Interpolation methods: log-linear, linear on rates, flat-forward, Nelson-Siegel, NSS, Smith-Wilson.",
+      "Discount, forward, composite, and spread curves. 10+ interpolation schemes. Nelson-Siegel, Svensson, Smith-Wilson parametric models.",
   },
   {
-    icon: Zap,
-    title: "Production Performance",
+    icon: BrainCircuit,
+    title: "AI-Ready Architecture",
     description:
-      "9-instrument SOFR curve calibration in under 1ms. Cache-friendly Rust Vec<f64> layouts, compiled AD arithmetic, and zero GIL contention for numerical work.",
+      "JSON-serializable objects, structured outputs, and an MCP server on the roadmap — designed for LLM agents to build, price, and analyze.",
+  },
+];
+
+const ASSET_CLASSES = [
+  {
+    title: "Rates",
+    href: "/docs/guides/rates",
+    shipped: 12,
+    items: [
+      "Interest Rate Swaps (IRS, FRA, ZCS, OIS, SBS)",
+      "Deposits & Futures",
+      "Caps & Floors (Black-76 / Bachelier)",
+      "Discount, Forward & Parametric Curves",
+      "Composite & Spread Curves",
+      "Multi-Curve Bootstrap & Calibration",
+      "Bucket-Level Risk Analytics",
+    ],
+    planned: ["Swaptions", "Bond Futures"],
+  },
+  {
+    title: "Credit",
+    href: "/docs/guides/credit",
+    shipped: 8,
+    items: [
+      "Fixed Rate Bonds & Bills",
+      "Floating Rate Notes (FRN, Sub-Period, Capped)",
+      "Structured Bonds (Zero, Step-Up, Amortizing, PIK)",
+      "Callable Bonds (Hull-White lattice, OAS)",
+      "Credit Default Swaps & Hazard Curves",
+      "Asset Swap Spreads",
+      "Fitted Bond Curves (NS/NSS/Smith-Wilson)",
+    ],
+    planned: ["Credit Linked Notes", "CLOs/ABS"],
+  },
+  {
+    title: "FX",
+    href: "/docs/guides/fx",
+    shipped: 5,
+    items: [
+      "FX Rates with BFS Triangulation",
+      "FX Forwards & Forward Points",
+      "Cross-Currency Swaps (MTM/non-MTM)",
+      "Non-Deliverable Instruments (NDF, NDIRS, NDXCS)",
+      "FX Implied Discount Curves",
+    ],
+    planned: ["FX Options & Vol Surface", "Exotic Barriers & Digitals"],
+  },
+];
+
+const AI_FEATURES = [
+  {
+    icon: Bot,
+    title: "MCP Server",
+    status: "Planned",
+    description:
+      "Model Context Protocol server exposing curve construction, pricing, risk analytics, and market data as tool endpoints for LLM agents.",
+  },
+  {
+    icon: BrainCircuit,
+    title: "Agentic Workflows",
+    status: "Planned",
+    description:
+      "Natural language-driven curve building, trade pricing, scenario analysis, and risk reporting through multi-step tool-use chains.",
+  },
+  {
+    icon: Shield,
+    title: "Structured Outputs",
+    status: "Available",
+    description:
+      "Full JSON serialization across curves, instruments, and MarketContext. Every object round-trips cleanly — ready for agent consumption.",
   },
 ];
 
@@ -75,39 +149,51 @@ const DOC_SECTIONS = [
     icon: ArrowRight,
   },
   {
-    href: "/docs/api/curves",
+    href: "/docs/api",
     label: "API Reference",
     description: "Complete signatures and working examples",
     icon: BookOpen,
   },
 ];
 
-const CODE_SNIPPET = `import datetime
+const CODE_SNIPPET = `import datetime as dt
 from vade import DiscountCurve, IRS, Solver
 
 # Build a SOFR discount curve
 nodes = {
-    datetime.date(2025, 6, 16): 1.0,
-    datetime.date(2026, 6, 16): 1.0,   # 1Y
-    datetime.date(2027, 6, 16): 1.0,   # 2Y
-    datetime.date(2030, 6, 16): 1.0,   # 5Y
-    datetime.date(2035, 6, 16): 1.0,   # 10Y
+    dt.date(2025, 6, 16): 1.0,
+    dt.date(2026, 6, 16): 1.0,   # 1Y
+    dt.date(2027, 6, 16): 1.0,   # 2Y
+    dt.date(2030, 6, 16): 1.0,   # 5Y
+    dt.date(2035, 6, 16): 1.0,   # 10Y
 }
 
 curve = DiscountCurve(nodes, interpolation="log_linear")
 
 # Calibrate to market instruments
-irs_2y = IRS(effective=datetime.date(2025, 6, 16),
+irs_2y = IRS(effective=dt.date(2025, 6, 16),
              termination="2Y", fixed_rate=3.85)
 
 solver = Solver(curves=[curve], instruments=[
     (irs_2y, 3.85, 0, "2Y_IRS", "USD"),
 ])
 result = solver.iterate()
-assert result.converged  # True ✓
+assert result.converged  # True
 
 # Compute delta risk via automatic differentiation
 delta = solver.delta(irs_2y, result)`;
+
+function ProgressBar({ shipped, total }: { shipped: number; total: number }) {
+  const pct = Math.round((shipped / total) * 100);
+  return (
+    <div className="flex items-center gap-3">
+      <div className="bg-muted h-2 flex-1 overflow-hidden rounded-full">
+        <div className="bg-primary h-full rounded-full transition-all" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-muted-foreground text-xs font-medium tabular-nums">{pct}%</span>
+    </div>
+  );
+}
 
 export default function HomePage() {
   return (
@@ -122,9 +208,12 @@ export default function HomePage() {
             <Badge variant="outline" className="mb-4">
               Built for production quant workflows
             </Badge>
-            <h2 className="text-3xl font-bold tracking-tight">Everything you need for rates analytics</h2>
-            <p className="text-muted-foreground mx-auto mt-3 max-w-xl text-base">
-              From curve construction to exotic instrument pricing and risk — vade handles it in native Rust speed.
+            <h2 className="text-3xl font-bold tracking-tight">
+              Institutional-grade fixed income analytics
+            </h2>
+            <p className="text-muted-foreground mx-auto mt-3 max-w-2xl text-base">
+              From curve construction to exotic instrument pricing and risk — across rates, credit, and FX — vade
+              handles it at native Rust speed with first-class AI agent support.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -141,6 +230,114 @@ export default function HomePage() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        </section>
+
+        <Separator />
+
+        {/* AI-Ready Section */}
+        <section className="bg-muted/30 py-24">
+          <div className="mx-auto max-w-6xl px-6">
+            <div className="mb-12 text-center">
+              <Badge variant="outline" className="mb-4">
+                Designed for AI agents
+              </Badge>
+              <h2 className="text-3xl font-bold tracking-tight">The quant library that AI agents can use</h2>
+              <p className="text-muted-foreground mx-auto mt-3 max-w-2xl text-base">
+                Vade is built from day one with structured, serializable outputs and a clean tool interface — so LLM
+                agents can build curves, price trades, and run risk just like a human quant.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {AI_FEATURES.map((f) => (
+                <Card key={f.title} className="border-border/60 relative overflow-hidden">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-primary/10 text-primary flex size-9 items-center justify-center rounded-md">
+                        <f.icon className="size-4" />
+                      </div>
+                      <Badge
+                        variant={f.status === "Available" ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {f.status}
+                      </Badge>
+                    </div>
+                    <CardTitle className="mt-2 text-base">{f.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription className="text-sm leading-relaxed">{f.description}</CardDescription>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            <div className="mt-8 text-center">
+              <p className="text-muted-foreground text-sm">
+                With MCP integration, an AI assistant can: <em>&quot;Build a SOFR curve from today&apos;s swaps, price a 5Y IRS, and show me the delta ladder&quot;</em> — and Vade executes each step as a native tool call.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <Separator />
+
+        {/* Roadmap / Asset Class Progress */}
+        <section className="mx-auto max-w-6xl px-6 py-24">
+          <div className="mb-12 text-center">
+            <Badge variant="outline" className="mb-4">
+              Roadmap progress
+            </Badge>
+            <h2 className="text-3xl font-bold tracking-tight">Broad coverage, actively growing</h2>
+            <p className="text-muted-foreground mx-auto mt-3 max-w-2xl text-base">
+              30+ instruments and analytics shipped across three asset classes. Swaptions, FX options, portfolio risk,
+              and AI integration are next.
+            </p>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-3">
+            {ASSET_CLASSES.map((ac) => (
+              <Link
+                key={ac.title}
+                href={ac.href}
+                className="group border-border/60 hover:border-primary/50 flex flex-col rounded-xl border p-6 transition-all"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-bold">{ac.title}</h3>
+                  <TrendingUp className="text-primary size-4" />
+                </div>
+                <ProgressBar shipped={ac.shipped} total={ac.shipped + ac.planned.length} />
+                <ul className="mt-4 space-y-1.5">
+                  {ac.items.map((item) => (
+                    <li key={item} className="flex items-start gap-2 text-xs">
+                      <span className="text-primary mt-0.5">&#10003;</span>
+                      <span className="text-muted-foreground">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+                {ac.planned.length > 0 && (
+                  <div className="border-border/60 mt-4 border-t pt-3">
+                    <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">
+                      Coming next
+                    </span>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {ac.planned.map((p) => (
+                        <Badge key={p} variant="secondary" className="text-[10px]">
+                          {p}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Link>
+            ))}
+          </div>
+          <div className="mt-8 text-center">
+            <Link
+              href="/docs/roadmap"
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-xs font-medium transition-all hover:bg-input/50"
+            >
+              View Full Roadmap
+              <ArrowRight className="size-4" />
+            </Link>
           </div>
         </section>
 
@@ -164,6 +361,7 @@ export default function HomePage() {
                     "Automatic differentiation — no finite differences",
                     "Sub-millisecond calibration on modern hardware",
                     "Full IDE support via PyO3 type stubs",
+                    "JSON-serializable for agent tool pipelines",
                   ].map((item) => (
                     <div key={item} className="flex items-start gap-2 text-sm">
                       <ChevronRight className="text-primary mt-0.5 size-4 shrink-0" />
@@ -261,7 +459,7 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 text-sm sm:flex-row">
           <div className="text-muted-foreground flex items-center gap-2">
             <div className="bg-primary size-4 rounded-sm" />
-            <span>vade — interest rate analytics for Python</span>
+            <span>vade — AI-ready quantitative analytics for Python</span>
           </div>
           <div className="text-muted-foreground flex gap-5">
             <Link href="/docs" className="hover:text-foreground transition-colors">
@@ -270,8 +468,11 @@ export default function HomePage() {
             <Link href="https://github.com/sercanatalik/vadepy" className="hover:text-foreground transition-colors">
               GitHub
             </Link>
-            <Link href="/docs/api/curves" className="hover:text-foreground transition-colors">
+            <Link href="/docs/api" className="hover:text-foreground transition-colors">
               API
+            </Link>
+            <Link href="/docs/roadmap" className="hover:text-foreground transition-colors">
+              Roadmap
             </Link>
           </div>
         </div>

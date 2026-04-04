@@ -1,10 +1,10 @@
 ---
 title: "Bootstrap & Parametric Curves"
-description: "Use [bootstrap](../../api/solver.md#bootstrap) for node-by-node curve stripping"
+description: "Use [bootstrap](../../api/rates/solver.md#bootstrap) for node-by-node curve stripping"
 ---
 
-Use [bootstrap](../../api/solver#bootstrap) for node-by-node curve stripping
-via Brent root-finding, and the [NelsonSiegel](../../api/curves#nelsonsiegel)
+Use [bootstrap](../../api/rates/solver#bootstrap) for node-by-node curve stripping
+via Brent root-finding, and the [NelsonSiegel](../../api/rates/curves#nelsonsiegel)
 family for analytical curve models with closed-form zero rate formulas.
 
 ---
@@ -123,7 +123,7 @@ float(nss.zero_rate(effective, datetime.date(2045, 6, 16)))  # 0.043019438305725
 
 ### Smith-Wilson
 
-The [SmithWilson](../../api/curves#smithwilson) model is used in Solvency II
+The [SmithWilson](../../api/rates/curves#smithwilson) model is used in Solvency II
 regulation. It takes market data points (dates and rates) and extrapolates
 toward an ultimate forward rate (UFR). The `alpha` parameter controls how
 quickly the curve converges to the UFR beyond the last liquid point.

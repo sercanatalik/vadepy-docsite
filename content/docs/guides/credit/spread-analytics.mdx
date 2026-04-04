@@ -89,7 +89,7 @@ maturity and the linearly interpolated swap rate at the bond's maturity. Unlike
 the Z-spread (which shifts the entire discount curve), the I-spread uses a
 single-point comparison against the swap curve.
 
-See [FixedRateBond.i\_spread](../../api/instruments#fixedratebond) API reference.
+See [FixedRateBond.i\_spread](../../api/credit/instruments#fixedratebond) API reference.
 
 ```python continuation
 i_sprd = bond.i_spread(settlement, swap_curve)
@@ -104,7 +104,7 @@ An asset swap packages a bond with an interest rate swap. The asset swap spread
 is the spread on the floating leg that makes the package NPV-neutral. It
 measures the bond's credit premium over the swap curve.
 
-See [AssetSwap](../../api/instruments#assetswap) API reference.
+See [AssetSwap](../../api/credit/instruments#assetswap) API reference.
 
 ### Par Asset Swap
 

@@ -1,18 +1,18 @@
 ---
 title: "Credit Curves & CDS"
-description: "Model default risk with [CreditImpliedCurve](../../api/curves.md#creditimpliedcurve)"
+description: "Model default risk with [CreditImpliedCurve](../../api/rates/curves.md#creditimpliedcurve)"
 ---
 
-Model default risk with [CreditImpliedCurve](../../api/curves#creditimpliedcurve)
+Model default risk with [CreditImpliedCurve](../../api/rates/curves#creditimpliedcurve)
 using piecewise flat hazard rates, and price credit protection with
-[CDS](../../api/instruments#cds) instruments against risk-free discount and
+[CDS](../../api/credit/instruments#cds) instruments against risk-free discount and
 credit curves.
 
 ---
 
 ## Credit Curves
 
-A [CreditImpliedCurve](../../api/curves#creditimpliedcurve) models default risk
+A [CreditImpliedCurve](../../api/rates/curves#creditimpliedcurve) models default risk
 through piecewise flat hazard rates. Nodes map dates to hazard rate levels, and
 the curve computes survival probabilities -- the likelihood that the reference
 entity has not defaulted by a given date. The
@@ -26,7 +26,7 @@ credit_curve.survival_probability(datetime.date(2030, 6, 16))  # 0.9371403492367
 
 ## CDS Pricing
 
-A [CDS](../../api/instruments#cds) (Credit Default Swap) provides protection
+A [CDS](../../api/credit/instruments#cds) (Credit Default Swap) provides protection
 against default. The buyer pays a quarterly fixed premium (in basis points) and
 receives a payout if the reference entity defaults. Pricing requires two curves:
 a risk-free discount curve and a credit curve. Note that `fixed_rate` is in

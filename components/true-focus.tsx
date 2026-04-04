@@ -13,6 +13,7 @@ interface TrueFocusProps {
   animationDuration?: number
   pauseBetweenAnimations?: number
   className?: string
+  wordClassName?: (word: string, index: number) => string | undefined
 }
 
 interface FocusRect {
@@ -32,6 +33,7 @@ export function TrueFocus({
   animationDuration = 0.5,
   pauseBetweenAnimations = 1,
   className = "",
+  wordClassName,
 }: TrueFocusProps) {
   const words = sentence.split(separator)
   const [currentIndex, setCurrentIndex] = useState<number>(0)
@@ -94,7 +96,7 @@ export function TrueFocus({
             ref={(el) => {
               wordRefs.current[index] = el
             }}
-            className="relative cursor-pointer"
+            className={`relative cursor-pointer ${wordClassName?.(word, index) ?? ""}`}
             style={{
               filter: isActive ? "blur(0px)" : `blur(${blurAmount}px)`,
               transition: `filter ${animationDuration}s ease`,
