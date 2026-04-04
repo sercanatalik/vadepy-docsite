@@ -1,13 +1,13 @@
 {
   "title": "API Reference",
   "pages": [
+    "rates",
+    "fx",
+    "credit",
+    "---",
     "calendar",
     "autodiff",
     "numerical",
-    "curves",
-    "instruments",
-    "solver",
-    "fx",
     "context",
     "cashflows"
   ]

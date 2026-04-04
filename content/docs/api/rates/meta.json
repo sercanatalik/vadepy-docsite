@@ -1,0 +1,9 @@
+{
+  "title": "Rates API Reference",
+  "pages": [
+    "index",
+    "instruments",
+    "curves",
+    "solver"
+  ]
+}

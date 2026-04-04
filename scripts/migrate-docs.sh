@@ -134,19 +134,58 @@ cat > "$DEST/api/meta.json" <<'EOF'
 {
   "title": "API Reference",
   "pages": [
+    "rates",
+    "fx",
+    "credit",
+    "---",
     "calendar",
     "autodiff",
     "numerical",
-    "curves",
-    "instruments",
-    "solver",
-    "fx",
     "context",
     "cashflows"
   ]
 }
 EOF
 echo "  -> api/meta.json"
+
+# api/rates/meta.json
+cat > "$DEST/api/rates/meta.json" <<'EOF'
+{
+  "title": "Rates API Reference",
+  "pages": [
+    "index",
+    "instruments",
+    "curves",
+    "solver"
+  ]
+}
+EOF
+echo "  -> api/rates/meta.json"
+
+# api/fx/meta.json
+cat > "$DEST/api/fx/meta.json" <<'EOF'
+{
+  "title": "FX API Reference",
+  "pages": [
+    "index",
+    "instruments",
+    "fx-rates"
+  ]
+}
+EOF
+echo "  -> api/fx/meta.json"
+
+# api/credit/meta.json
+cat > "$DEST/api/credit/meta.json" <<'EOF'
+{
+  "title": "Credit API Reference",
+  "pages": [
+    "index",
+    "instruments"
+  ]
+}
+EOF
+echo "  -> api/credit/meta.json"
 
 # guides/meta.json
 cat > "$DEST/guides/meta.json" <<'EOF'
@@ -159,8 +198,7 @@ cat > "$DEST/guides/meta.json" <<'EOF'
     "calibration",
     "rates",
     "credit",
-    "fx",
-    "financing"
+    "fx"
   ]
 }
 EOF
@@ -212,16 +250,6 @@ cat > "$DEST/guides/fx/meta.json" <<'EOF'
 EOF
 echo "  -> guides/fx/meta.json"
 
-# guides/financing/meta.json
-cat > "$DEST/guides/financing/meta.json" <<'EOF'
-{
-  "title": "Financing",
-  "pages": [
-    "index"
-  ]
-}
-EOF
-echo "  -> guides/financing/meta.json"
 
 echo ""
 echo "Done! Migrated $(find "$DEST" -name '*.mdx' | wc -l | tr -d ' ') MDX files and $(find "$DEST" -name 'meta.json' | wc -l | tr -d ' ') meta.json files."

@@ -1,0 +1,8 @@
+{
+  "title": "FX API Reference",
+  "pages": [
+    "index",
+    "instruments",
+    "fx-rates"
+  ]
+}
