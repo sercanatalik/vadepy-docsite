@@ -75,10 +75,16 @@ export default function HeroSection() {
             Roadmap
           </Link>
           <Link
-            href="mailto:info@vadepy.dev?subject=Feature%20Request"
+            href="https://github.com/sercanatalik/vadepy/discussions"
             className="inline-flex h-9 items-center gap-1 rounded-md border border-white/15 px-4 text-sm font-medium text-slate-300 transition-all hover:border-white/30 hover:bg-white/5 hover:text-white"
           >
             Request Feature
+          </Link>
+          <Link
+            href="https://github.com/sercanatalik/vadepy"
+            className="inline-flex h-9 items-center gap-1 rounded-md border border-white/15 px-4 text-sm font-medium text-slate-300 transition-all hover:border-white/30 hover:bg-white/5 hover:text-white"
+          >
+            Contribute
           </Link>
         </div>
 

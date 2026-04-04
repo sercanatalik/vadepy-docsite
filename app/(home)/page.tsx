@@ -487,6 +487,9 @@ export default function HomePage() {
             <Link href="/docs/roadmap" className="hover:text-foreground transition-colors">
               Roadmap
             </Link>
+            <Link href="mailto:info@vadepy.dev" className="hover:text-foreground transition-colors">
+              info@vadepy.dev
+            </Link>
           </div>
         </div>
       </footer>
