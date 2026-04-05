@@ -165,8 +165,7 @@ export default function HomePage() {
                 Everything you need for quantitative finance
               </h2>
               <p className="mx-auto max-w-2xl text-muted-foreground text-pretty">
-                A comprehensive toolkit designed by quants, for quants — with the performance demands of modern trading
-                systems.
+                Built by AI agents. Engineered for the performance demands of modern trading systems
               </p>
             </div>
 
@@ -186,7 +185,7 @@ export default function HomePage() {
                 },
                 {
                   icon: <Shield className="size-6" />,
-                  title: "Producttion Ready Risk & Valuation Engine",
+                  title: "Production Ready Risk & Valuation Engine",
                   description:
                     "Delta, gamma, and bucket-level risk via automatic differentiation — no finite differences. Full JSON serialization for every object, ready for agent pipelines and institutional workflows.",
                 },
